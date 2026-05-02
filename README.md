@@ -49,13 +49,16 @@ O protagonista é um personagem de pixel art inspirado em Nicolas Cage. Os inimi
 ## Arquivos
 
 - `main.py`: jogo principal.
+- `settings.py`: constantes compartilhadas.
+- `collision.py`: colisões e resolução de movimento.
+- `level.py`: geração aleatória das fases.
+- `render.py`: textura, HUD, cenário e telas.
 - `assets/`: texturas PNG usadas no jogo.
 - `gerar_assets.py`: script opcional para recriar as texturas placeholder.
 
 ## Próximos passos sugeridos no Codex
 
-1. Separar o código em arquivos: `player.py`, `level.py`, `render.py` e `collision.py`.
-2. Melhorar as texturas e animações do protagonista.
-3. Adicionar tela de vitória final ou ranking.
-4. Adicionar sons apenas se o professor permitir novas bibliotecas.
-5. Ajustar dificuldade, número de vidas e quantidade de inimigos conforme o tempo de apresentação.
+1. Melhorar as texturas e animações do protagonista.
+2. Adicionar tela de vitória final ou ranking.
+3. Adicionar sons apenas se o professor permitir novas bibliotecas.
+4. Ajustar dificuldade, número de vidas e quantidade de inimigos conforme o tempo de apresentação.
