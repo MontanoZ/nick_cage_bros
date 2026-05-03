@@ -160,13 +160,29 @@ def main():
 
             for inimigo in inimigos:
                 velocidade_inimigo = 70 + fase * 12
+                x_anterior = inimigo[0]
+                y_anterior = inimigo[1]
                 inimigo[0] += inimigo[4] * velocidade_inimigo * delta_time
                 inimigo[5] += delta_time
                 inimigo[1] += np.sin(inimigo[5] * 3.0) * 12.0 * delta_time
-                if inimigo[0] < 100:
-                    inimigo[4] = 1
-                if inimigo[0] > comprimento_fase - 200:
-                    inimigo[4] = -1
+                inimigo_ret = [inimigo[0], inimigo[1], inimigo[2], inimigo[3]]
+                bateu_em_bloco = False
+                for bloco in blocos:
+                    if retangulos_colidem(inimigo_ret, bloco):
+                        bateu_em_bloco = True
+                        break
+
+                if bateu_em_bloco:
+                    inimigo[0] = x_anterior
+                    inimigo[1] = y_anterior
+                    inimigo[4] *= -1
+                else:
+                    if inimigo[0] < 100:
+                        inimigo[0] = 100
+                        inimigo[4] = 1
+                    if inimigo[0] > comprimento_fase - 200:
+                        inimigo[0] = comprimento_fase - 200
+                        inimigo[4] = -1
 
             for moeda in moedas[:]:
                 if retangulos_colidem(jogador_ret, moeda):
