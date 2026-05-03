@@ -38,18 +38,22 @@ Execute o comando dentro da pasta do projeto, porque o código carrega as imagen
 - `render.py`: textura, HUD, cenário e telas.
 - `assets/`: texturas PNG usadas no jogo.
 - `gerar_assets.py`: script opcional para recriar as texturas placeholder.
+- `models.py`: modelos de dados para jogador, inimigos, itens e fases.
 
 ## Imagens do jogo
 
 ### Menu Inicial
+
 <img width="1582" height="1035" alt="Captura de Tela 2026-05-03 às 20 20 04" src="https://github.com/user-attachments/assets/7a21e677-5223-4fbd-b01e-a0464096c44f" />
 
-
 ### Tela de derrota
+
 <img width="1582" height="1035" alt="Captura de Tela 2026-05-03 às 20 20 38" src="https://github.com/user-attachments/assets/a860c5a6-4f81-44ec-8f10-f081f65bf9c3" />
 
 ### Inicio do jogo
+
 <img width="1582" height="1035" alt="Captura de Tela 2026-05-03 às 20 20 11" src="https://github.com/user-attachments/assets/fb59603a-e4ec-4567-9aec-0120fa0183f8" />
 
 ### Inimigos, plataformas e buracos
+
 <img width="1582" height="1035" alt="Captura de Tela 2026-05-03 às 20 20 26" src="https://github.com/user-attachments/assets/4c2c3ea0-894a-4b56-8843-68efb159ed75" />
