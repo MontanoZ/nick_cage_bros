@@ -89,31 +89,6 @@ def _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
     return True
 
 
-def _gerar_trecho_plataformas(plataformas, protecoes, x, nivel, limite_x, dificuldade):
-    while x < limite_x:
-        largura_maxima = min(LARGURA_MAX_PLATAFORMA, (limite_x - x) // TAMANHO_TILE)
-        if largura_maxima < LARGURA_MIN_PLATAFORMA:
-            break
-
-        if dificuldade < 4:
-            largura_minima = 2
-            largura_maxima_efetiva = min(3, largura_maxima)
-        else:
-            largura_minima = LARGURA_MIN_PLATAFORMA
-            largura_maxima_efetiva = min(4, largura_maxima)
-
-        largura = random.randint(largura_minima, largura_maxima_efetiva)
-        _adicionar_plataforma(plataformas, protecoes, x, nivel, largura)
-        x += largura * TAMANHO_TILE
-
-        if x >= limite_x:
-            break
-
-        x += random.randint(1, 2) * TAMANHO_TILE
-
-    return x
-
-
 def _escolher_nivel_proximo(nivel_atual, espaco_restante, dificuldade):
     if espaco_restante <= 10 * TAMANHO_TILE:
         return max(0, nivel_atual - 1)
