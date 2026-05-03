@@ -3,9 +3,21 @@ import time
 import glfw
 import numpy as np
 
-from collision import resolver_colisao_horizontal, resolver_colisao_vertical, retangulos_colidem
+from collision import (
+    resolver_colisao_horizontal,
+    resolver_colisao_vertical,
+    retangulos_colidem,
+)
 from level import reiniciar_jogo
-from render import carregar_textura, configurar_opengl, desenhar_fundo, desenhar_hud, desenhar_jogador, desenhar_mapa, desenhar_tela_mensagem
+from render import (
+    carregar_textura,
+    configurar_opengl,
+    desenhar_fundo,
+    desenhar_hud,
+    desenhar_jogador,
+    desenhar_mapa,
+    desenhar_tela_mensagem,
+)
 from settings import (
     ACELERACAO_PLAYER,
     ALTURA,
@@ -14,9 +26,9 @@ from settings import (
     GRAVIDADE,
     JOGANDO,
     LARGURA,
+    TELA_INICIO,
     TEMPO_BUFFER_PULO,
     TEMPO_COYOTE,
-    TELA_INICIO,
     TITULO,
     VELOCIDADE_PLAYER,
     VELOCIDADE_PULO,
@@ -92,12 +104,20 @@ def main():
                 invencivel = False
                 tempo_invencivel = 0.0
                 espaco_antes = False
-                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = reiniciar_jogo(fase)
+                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = (
+                    reiniciar_jogo(fase)
+                )
         enter_antes = enter_agora
 
         if estado == JOGANDO:
-            esquerda = glfw.get_key(janela, glfw.KEY_LEFT) == glfw.PRESS or glfw.get_key(janela, glfw.KEY_A) == glfw.PRESS
-            direita = glfw.get_key(janela, glfw.KEY_RIGHT) == glfw.PRESS or glfw.get_key(janela, glfw.KEY_D) == glfw.PRESS
+            esquerda = (
+                glfw.get_key(janela, glfw.KEY_LEFT) == glfw.PRESS
+                or glfw.get_key(janela, glfw.KEY_A) == glfw.PRESS
+            )
+            direita = (
+                glfw.get_key(janela, glfw.KEY_RIGHT) == glfw.PRESS
+                or glfw.get_key(janela, glfw.KEY_D) == glfw.PRESS
+            )
             direcao_x = 0
             if direita and not esquerda:
                 direcao_x = 1
@@ -107,9 +127,13 @@ def main():
             if direcao_x != 0:
                 alvo_x = direcao_x * VELOCIDADE_PLAYER
                 if velocidade_x < alvo_x:
-                    velocidade_x = min(alvo_x, velocidade_x + ACELERACAO_PLAYER * delta_time)
+                    velocidade_x = min(
+                        alvo_x, velocidade_x + ACELERACAO_PLAYER * delta_time
+                    )
                 elif velocidade_x > alvo_x:
-                    velocidade_x = max(alvo_x, velocidade_x - ACELERACAO_PLAYER * delta_time)
+                    velocidade_x = max(
+                        alvo_x, velocidade_x - ACELERACAO_PLAYER * delta_time
+                    )
             else:
                 if velocidade_x > 0:
                     velocidade_x = max(0.0, velocidade_x - ATRITO_PLAYER * delta_time)
@@ -145,7 +169,9 @@ def main():
 
             velocidade_y += GRAVIDADE * delta_time
             jogador[1] += velocidade_y * delta_time
-            velocidade_y, esta_no_chao = resolver_colisao_vertical(jogador, blocos, velocidade_y)
+            velocidade_y, esta_no_chao = resolver_colisao_vertical(
+                jogador, blocos, velocidade_y
+            )
             if esta_no_chao:
                 tempo_coyote = TEMPO_COYOTE
 
@@ -230,7 +256,9 @@ def main():
                 esta_no_chao = False
                 tempo_coyote = 0.0
                 tempo_buffer_pulo = 0.0
-                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = reiniciar_jogo(fase)
+                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = (
+                    reiniciar_jogo(fase)
+                )
 
             camera_x = jogador[0] - 280
             if camera_x < 0:

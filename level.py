@@ -12,15 +12,16 @@ from settings import (
 )
 
 BURACO_MIN_TAMANHO = 1
-BURACO_MAX_TAMANHO = 2
+BURACO_MAX_TAMANHO = 3
 NIVEIS_PLATAFORMA = ALTURAS_PLATAFORMA
 MARGEM_INICIO = 8 * TAMANHO_TILE
 MARGEM_FIM = 8 * TAMANHO_TILE
-SOLIDO_ENTRE_BURACOS = 4 * TAMANHO_TILE
+SOLIDO_ENTRE_BURACOS_MINIMO = 2 * TAMANHO_TILE
+SOLIDO_ENTRE_BURACOS_BASE = 4 * TAMANHO_TILE
 MARGEM_PROTECAO_PLATAFORMA = {
-    2: 3 * TAMANHO_TILE,
-    1: 2 * TAMANHO_TILE,
-    0: 1 * TAMANHO_TILE,
+    2: TAMANHO_TILE // 2,
+    1: TAMANHO_TILE // 2,
+    0: TAMANHO_TILE // 2,
 }
 PADROES_SEGMENTO = (
     (0,),
@@ -39,7 +40,9 @@ def _adicionar_plataforma(plataformas, protecoes, x, nivel, largura_tiles):
     plataforma = [x, y, largura, TAMANHO_TILE, 1]
     plataformas.append(plataforma)
     margem = MARGEM_PROTECAO_PLATAFORMA[nivel]
-    protecoes.append((x - margem, x + largura + margem))
+    if margem > 0:
+        protecoes.append((x - margem, x + margem))
+        protecoes.append((x + largura - margem, x + largura + margem))
 
 
 def _intervalo_colide_com_protecao(inicio, fim, protecoes):
@@ -47,6 +50,41 @@ def _intervalo_colide_com_protecao(inicio, fim, protecoes):
         if _intervalos_colidem(inicio, fim, protecao_inicio, protecao_fim):
             return True
     return False
+
+
+def _chance_buraco(dificuldade):
+    return min(18 + dificuldade * 4, 58)
+
+
+def _quantidade_minima_buracos(comprimento, dificuldade):
+    tiles_uteis = max(1, (comprimento - MARGEM_INICIO - MARGEM_FIM) // TAMANHO_TILE)
+    quantidade_por_dificuldade = 2 + dificuldade // 2
+    quantidade_por_comprimento = tiles_uteis // max(14, 26 - dificuldade)
+    return max(quantidade_por_dificuldade, quantidade_por_comprimento)
+
+
+def _espaco_solido_entre_buracos(dificuldade):
+    reducao = min(dificuldade // 3, 2) * TAMANHO_TILE
+    return max(SOLIDO_ENTRE_BURACOS_MINIMO, SOLIDO_ENTRE_BURACOS_BASE - reducao)
+
+
+def _tamanho_maximo_buraco(dificuldade):
+    if dificuldade < 3:
+        return 1
+    if dificuldade < 8:
+        return 2
+    return BURACO_MAX_TAMANHO
+
+
+def _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
+    if _intervalo_colide_com_protecao(inicio, fim, protecoes):
+        return False
+
+    for buraco_inicio, buraco_fim in buracos:
+        if inicio < buraco_fim + espaco_solido and fim > buraco_inicio - espaco_solido:
+            return False
+
+    return True
 
 
 def _escolher_padrao_segmento(dificuldade):
@@ -205,25 +243,48 @@ def _preencher_chao(comprimento, buracos):
 def _gerar_buracos(comprimento, dificuldade, protecoes):
     buracos = []
     x = 0
-    ultimo_fim_buraco = -SOLIDO_ENTRE_BURACOS
+    espaco_solido = _espaco_solido_entre_buracos(dificuldade)
+    ultimo_fim_buraco = -espaco_solido
     while x < comprimento:
         if x <= MARGEM_INICIO or x >= comprimento - MARGEM_FIM:
             x += TAMANHO_TILE
             continue
 
-        pode_criar_buraco = x - ultimo_fim_buraco >= SOLIDO_ENTRE_BURACOS
-        chance_buraco = min(10 + dificuldade * 2, 22)
+        pode_criar_buraco = x - ultimo_fim_buraco >= espaco_solido
+        chance_buraco = _chance_buraco(dificuldade)
         if pode_criar_buraco and random.randint(0, 100) < chance_buraco:
-            tamanho_maximo_buraco = 1 if dificuldade < 6 else BURACO_MAX_TAMANHO
-            tamanho_buraco = random.randint(BURACO_MIN_TAMANHO, tamanho_maximo_buraco)
+            tamanho_buraco = random.randint(BURACO_MIN_TAMANHO, _tamanho_maximo_buraco(dificuldade))
             inicio = x
             fim = x + tamanho_buraco * TAMANHO_TILE
-            if not _intervalo_colide_com_protecao(inicio, fim, protecoes):
+            if _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
                 buracos.append((inicio, fim))
                 ultimo_fim_buraco = fim
-                x = fim + SOLIDO_ENTRE_BURACOS
+                x = fim + espaco_solido
                 continue
         x += TAMANHO_TILE
+
+    quantidade_minima = _quantidade_minima_buracos(comprimento, dificuldade)
+    tamanho_maximo = _tamanho_maximo_buraco(dificuldade)
+    while len(buracos) < quantidade_minima:
+        candidatos = []
+        for tamanho_buraco in range(tamanho_maximo, BURACO_MIN_TAMANHO - 1, -1):
+            tile_inicio = MARGEM_INICIO // TAMANHO_TILE + 1
+            tile_fim = (comprimento - MARGEM_FIM) // TAMANHO_TILE - tamanho_buraco
+            for tile_x in range(tile_inicio, tile_fim + 1):
+                inicio = tile_x * TAMANHO_TILE
+                fim = inicio + tamanho_buraco * TAMANHO_TILE
+                if _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
+                    candidatos.append((inicio, fim))
+
+            if candidatos:
+                break
+
+        if not candidatos:
+            break
+
+        buracos.append(random.choice(candidatos))
+
+    buracos.sort()
     return buracos
 
 
