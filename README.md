@@ -1,6 +1,6 @@
 # Nick Cage Bros - projeto OpenGL/Python
 
-Jogo 2D inspirado em **Super Mario Bros.**, feito com Python, GLFW, OpenGL imediato, `PIL` e `numpy`.
+Jogo 2D inspirado em **Super Mario Bros.**, feito com Python, GLFW, OpenGL imediato, PIL e numpy.
 
 ## Como executar
 
