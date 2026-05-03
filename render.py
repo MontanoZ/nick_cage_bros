@@ -1,4 +1,5 @@
 import math
+from collections import OrderedDict
 from functools import lru_cache
 
 import numpy as np
@@ -7,6 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from models import Block, Coin, Enemy, Goal, Player
 from settings import ALTURA, GAME_OVER, LARGURA, TELA_INICIO
+
+_CACHE_TEXTO_MAX_ITENS = 128
+_cache_texturas_texto: "OrderedDict[tuple, tuple[int, int, int]]" = OrderedDict()
 
 
 def carregar_textura(caminho):
@@ -87,45 +91,70 @@ def _uploadar_imagem_como_textura(imagem):
     return textura_id
 
 
-def desenhar_texto_fonte(texto, x, y, tamanho, r, g, b, a=1.0, centralizado=False, negrito=False):
-    if not texto:
-        return
+def _normalizar_cor_rgba(r, g, b, a):
+    return (
+        max(0, min(255, int(r * 255))),
+        max(0, min(255, int(g * 255))),
+        max(0, min(255, int(b * 255))),
+        max(0, min(255, int(a * 255))),
+    )
 
-    fonte = _carregar_fonte(max(8, int(tamanho)), negrito=negrito)
+
+def _obter_textura_texto_cacheada(texto, tamanho, r, g, b, a, negrito):
+    tamanho_fonte = max(8, int(tamanho))
+    cor = _normalizar_cor_rgba(r, g, b, a)
+    chave = (texto, tamanho_fonte, cor, negrito)
+    entrada = _cache_texturas_texto.get(chave)
+    if entrada is not None:
+        _cache_texturas_texto.move_to_end(chave)
+        return entrada
+
+    fonte = _carregar_fonte(tamanho_fonte, negrito=negrito)
     imagem_base = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    desenho = ImageDraw.Draw(imagem_base)
-    bbox = desenho.textbbox((0, 0), texto, font=fonte)
+    desenho_base = ImageDraw.Draw(imagem_base)
+    bbox = desenho_base.textbbox((0, 0), texto, font=fonte)
     largura = max(1, bbox[2] - bbox[0])
     altura = max(1, bbox[3] - bbox[1])
     padding_x = max(2, int(tamanho * 0.18))
     padding_y = max(2, int(tamanho * 0.14))
+
     imagem = Image.new(
         "RGBA",
         (largura + padding_x * 2, altura + padding_y * 2),
         (0, 0, 0, 0),
     )
     desenho = ImageDraw.Draw(imagem)
-    cor = (
-        max(0, min(255, int(r * 255))),
-        max(0, min(255, int(g * 255))),
-        max(0, min(255, int(b * 255))),
-        max(0, min(255, int(a * 255))),
-    )
     desenho.text((padding_x - bbox[0], padding_y - bbox[1]), texto, font=fonte, fill=cor)
+    textura_id = _uploadar_imagem_como_textura(imagem)
+    entrada = (textura_id, imagem.width, imagem.height)
+    _cache_texturas_texto[chave] = entrada
 
-    textura = _uploadar_imagem_como_textura(imagem)
-    try:
-        quad_x = x - imagem.width / 2 if centralizado else x
-        quad_y = y - imagem.height / 2 if centralizado else y
-        desenhar_quad_textura(textura, quad_x, quad_y, imagem.width, imagem.height)
-    finally:
-        glDeleteTextures([textura])
+    if len(_cache_texturas_texto) > _CACHE_TEXTO_MAX_ITENS:
+        _, (textura_antiga, _, _) = _cache_texturas_texto.popitem(last=False)
+        glDeleteTextures([textura_antiga])
+
+    return entrada
+
+
+def desenhar_texto_fonte(texto, x, y, tamanho, r, g, b, a=1.0, centralizado=False, negrito=False):
+    if not texto:
+        return
+
+    textura, largura, altura = _obter_textura_texto_cacheada(
+        texto, tamanho, r, g, b, a, negrito
+    )
+    quad_x = x - largura / 2 if centralizado else x
+    quad_y = y - altura / 2 if centralizado else y
+    desenhar_quad_textura(textura, quad_x, quad_y, largura, altura)
 
 
 def liberar_texturas(texturas):
     ids = [textura_id for textura_id in texturas.values() if textura_id]
     if ids:
         glDeleteTextures(ids)
+    if _cache_texturas_texto:
+        glDeleteTextures([entrada[0] for entrada in _cache_texturas_texto.values()])
+        _cache_texturas_texto.clear()
 
 
 def configurar_opengl():
@@ -314,43 +343,6 @@ def desenhar_jogador(texturas, jogador: Player, camera_x, invencivel, tempo):
     )
 
 
-def desenhar_segmento(x, y, w, h):
-    desenhar_quad_cor(x, y, w, h, 1.0, 0.92, 0.25)
-
-
-def desenhar_digito(numero, x, y, escala):
-    segmentos = [
-        [1, 1, 1, 1, 1, 1, 0],
-        [0, 1, 1, 0, 0, 0, 0],
-        [1, 1, 0, 1, 1, 0, 1],
-        [1, 1, 1, 1, 0, 0, 1],
-        [0, 1, 1, 0, 0, 1, 1],
-        [1, 0, 1, 1, 0, 1, 1],
-        [1, 0, 1, 1, 1, 1, 1],
-        [1, 1, 1, 0, 0, 0, 0],
-        [1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 0, 1, 1],
-    ]
-    s = segmentos[numero]
-    t = 4 * escala
-    l = 22 * escala
-    a = 38 * escala
-    if s[0]:
-        desenhar_segmento(x + t, y + a, l, t)
-    if s[1]:
-        desenhar_segmento(x + l + t, y + a / 2 + t, t, a / 2)
-    if s[2]:
-        desenhar_segmento(x + l + t, y + t, t, a / 2)
-    if s[3]:
-        desenhar_segmento(x + t, y, l, t)
-    if s[4]:
-        desenhar_segmento(x, y + t, t, a / 2)
-    if s[5]:
-        desenhar_segmento(x, y + a / 2 + t, t, a / 2)
-    if s[6]:
-        desenhar_segmento(x + t, y + a / 2, l, t)
-
-
 def desenhar_numero(valor, x, y, escala):
     desenhar_texto_fonte(str(valor), x, y, 24 * escala, 1.0, 0.92, 0.25, 1.0, negrito=True)
 
@@ -371,118 +363,16 @@ def desenhar_coracao(x, y, escala, brilho=1.0):
 def desenhar_moeda(x, y, escala, brilho=1.0):
     desenhar_circulo(x + 12 * escala, y + 12 * escala, 11 * escala, 1.0, 0.84, 0.22, 0.95)
     desenhar_circulo(x + 12 * escala, y + 12 * escala, 7 * escala, 1.0, 0.96, 0.55, 1.0)
-    desenhar_quad_rgba(x + 10 * escala, y + 4 * escala, 4 * escala, 16 * escala, 1.0, 0.75, 0.15, brilho)
-
-
-def desenhar_estrela(x, y, escala, brilho=1.0):
-    pontos = [
-        (x + 12 * escala, y + 22 * escala),
-        (x + 16 * escala, y + 16 * escala),
-        (x + 22 * escala, y + 12 * escala),
-        (x + 16 * escala, y + 8 * escala),
-        (x + 12 * escala, y + 2 * escala),
-        (x + 8 * escala, y + 8 * escala),
-        (x + 2 * escala, y + 12 * escala),
-        (x + 8 * escala, y + 16 * escala),
-    ]
-    glDisable(GL_TEXTURE_2D)
-    glColor4f(1.0 * brilho, 0.88 * brilho, 0.32 * brilho, 1.0)
-    glBegin(GL_TRIANGLE_FAN)
-    glVertex2f(x + 12 * escala, y + 12 * escala)
-    for px, py in pontos + [pontos[0]]:
-        glVertex2f(px, py)
-    glEnd()
-
-
-GLIFOS_5X7 = {
-    "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-    "C": ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
-    "D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
-    "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
-    "G": ["01111", "10000", "10000", "10111", "10001", "10001", "01110"],
-    "H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
-    "I": ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
-    "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-    "M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
-    "N": ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
-    "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-    "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-    "Q": ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
-    "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-    "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
-    "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-    "U": ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
-    "V": ["10001", "10001", "10001", "10001", "01010", "01010", "00100"],
-    "X": ["10001", "01010", "00100", "00100", "00100", "01010", "10001"],
-    "Z": ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
-    "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
-    "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
-    "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
-    "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
-    "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
-    "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
-    "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
-    "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
-    "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
-    "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
-    ":": ["00000", "00100", "00100", "00000", "00100", "00100", "00000"],
-    "/": ["00001", "00010", "00100", "01000", "10000", "00000", "00000"],
-    "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
-    "<": ["00001", "00010", "00100", "01000", "00100", "00010", "00001"],
-    ">": ["10000", "01000", "00100", "00010", "00100", "01000", "10000"],
-    " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
-}
-
-
-def desenhar_caractere(char, x, y, escala, r, g, b, a=1.0):
-    glifo = GLIFOS_5X7.get(char, GLIFOS_5X7[" "])
-    tamanho_pixel = 3 * escala
-    for linha in range(7):
-        for coluna in range(5):
-            if glifo[linha][coluna] == "1":
-                px = x + coluna * tamanho_pixel
-                py = y + (6 - linha) * tamanho_pixel
-                desenhar_quad_rgba(px, py, tamanho_pixel, tamanho_pixel, r, g, b, a)
-
-
-def desenhar_linha_texto(texto, x, y, escala, r, g, b, a=1.0):
-    desenhar_texto_fonte(texto, x, y, 22 * escala, r, g, b, a)
-
-
-def desenhar_tecla_rotulada(x, y, largura, altura, rotulo):
-    desenhar_tecla(x, y, largura, altura, 0.18, 0.24, 0.38, 0.95)
-    desenhar_texto_fonte(
-        rotulo,
-        x + largura / 2,
-        y + altura / 2,
-        18,
-        0.98,
-        0.85,
-        0.30,
+    desenhar_quad_rgba(
+        x + 10 * escala,
+        y + 4 * escala,
+        4 * escala,
+        16 * escala,
         1.0,
-        centralizado=True,
-        negrito=True,
+        0.75,
+        0.15,
+        brilho,
     )
-
-
-def desenhar_cartao_instrucao(x, y, largura, altura, titulo, linhas):
-    desenhar_texto_fonte(
-        titulo,
-        x + largura / 2,
-        y + altura - 38,
-        20,
-        0.98,
-        0.90,
-        0.36,
-        1.0,
-        centralizado=True,
-        negrito=True,
-    )
-
-    linha_y = y + altura - 80
-    for linha in linhas:
-        desenhar_texto_fonte(linha, x + 20, linha_y, 15, 0.90, 0.95, 1.0, 0.95)
-        linha_y -= 24
 
 
 def desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo):
@@ -504,7 +394,6 @@ def desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo):
     desenhar_numero(pontos, 495, ALTURA - 56, 0.70)
 
     desenhar_quad_rgba(690, ALTURA - 62, 242, 36, 0.11, 0.18, 0.28, 0.92)
-    desenhar_estrela(728, ALTURA - 58, 0.78, 0.90 + brilho * 0.10)
     desenhar_texto_fonte("FASE", 760, ALTURA - 51, 18, 0.92, 0.96, 1.0, 0.82, negrito=True)
     desenhar_numero(fase, 820, ALTURA - 56, 0.70)
 
@@ -525,25 +414,8 @@ def desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo):
     desenhar_quad_rgba(barra_x + barra_w - 16, barra_y, 14, 14, 0.96, 0.83, 0.37, 0.95)
 
 
-def desenhar_tecla(x, y, largura, altura, r, g, b, a=1.0):
-    desenhar_quad_rgba(x, y, largura, altura, r, g, b, a)
-    desenhar_quad_rgba(x + 2, y + 2, largura - 4, altura - 4, 1.0, 1.0, 1.0, 0.06)
-
-
-def desenhar_botao_play(x, y, tamanho):
-    desenhar_circulo(x + tamanho / 2, y + tamanho / 2, tamanho / 2, 1.0, 0.89, 0.30, 1.0)
-    desenhar_circulo(x + tamanho / 2, y + tamanho / 2, tamanho / 2 - 6, 0.18, 0.18, 0.24, 1.0)
-    glDisable(GL_TEXTURE_2D)
-    glColor4f(1.0, 0.92, 0.30, 1.0)
-    glBegin(GL_TRIANGLES)
-    glVertex2f(x + tamanho * 0.42, y + tamanho * 0.32)
-    glVertex2f(x + tamanho * 0.42, y + tamanho * 0.68)
-    glVertex2f(x + tamanho * 0.70, y + tamanho * 0.50)
-    glEnd()
-
 
 def desenhar_tela_inicio(tempo):
-    # Caixa centralizada
     box_w = 640
     box_h = 314
     box_x = (LARGURA - box_w) / 2
@@ -559,10 +431,9 @@ def desenhar_tela_inicio(tempo):
     desenhar_quad_rgba(box_x, box_y, box_w, box_h, 0.02, 0.03, 0.06, 0.95)
     desenhar_quad_rgba(inner_x, inner_y, inner_w, inner_h, 0.12, 0.16, 0.24, 0.96)
 
-    # Textos centralizados dentro da caixa
     texto_x = LARGURA / 2
     titulo_y = box_y + box_h * 0.78
-    controles_y = box_y + box_h * 0.55
+    controles_y = box_y + box_h * 0.62
 
     desenhar_texto_fonte("NICK CAGE BROS", texto_x, titulo_y, 34, 0.99, 0.92, 0.42, 1.0, centralizado=True, negrito=True)
 
@@ -587,7 +458,6 @@ def desenhar_tela_inicio(tempo):
 
 
 def desenhar_tela_game_over(tempo):
-    # Caixa centralizada
     box_w = 340
     box_h = 214
     box_x = (LARGURA - box_w) / 2
@@ -602,7 +472,6 @@ def desenhar_tela_game_over(tempo):
     desenhar_quad_rgba(box_x, box_y, box_w, box_h, 0.02, 0.03, 0.06, 0.95)
     desenhar_quad_rgba(inner_x, inner_y, inner_w, inner_h, 0.12, 0.16, 0.24, 0.96)
 
-    # Textos centralizados dentro da caixa
     texto_x = LARGURA / 2
     texto_principal_y = box_y + box_h * 0.36
     texto_secundario_y = box_y + box_h * 0.64

@@ -5,8 +5,8 @@ Jogo 2D inspirado em **Super Mario Bros.** com tema do Nicolas Cage, feito com P
 ## Como executar
 
 ```bash
-python -m pip install -r requirements.txt
-python main.py
+python3 -m pip install -r requirements.txt
+python3 main.py
 ```
 
 Execute o comando dentro da pasta do projeto, porque o código carrega as imagens a partir de `assets/`.

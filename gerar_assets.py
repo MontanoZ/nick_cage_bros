@@ -126,11 +126,16 @@ def sky():
     salvar('sky.png', img)
 
 
-player()
-bee()
-sahur()
-ground()
-block()
-chest()
-coin()
-sky()
+def gerar_todos_assets():
+    player()
+    bee()
+    sahur()
+    ground()
+    block()
+    chest()
+    coin()
+    sky()
+
+
+if __name__ == "__main__":
+    gerar_todos_assets()
