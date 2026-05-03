@@ -1,3 +1,5 @@
+# Configurações globais do jogo: dimensões, física, dificuldade e estados de tela.
+
 LARGURA = 960
 ALTURA = 540
 TITULO = "Nick Cage Bros - OpenGL"

@@ -1,3 +1,5 @@
+# Arquivo principal do jogo: inicializa janela, loop principal, atualiza estado e renderiza cada frame.
+
 import math
 import time
 from dataclasses import dataclass
@@ -43,6 +45,8 @@ MARGEM_COLISAO_SAHUR = 6
 
 
 @dataclass
+
+# Representa todo o estado mutável da partida em execução.
 class EstadoJogo:
     estado: int
     fase: int
@@ -66,6 +70,7 @@ class EstadoJogo:
     espaco_antes: bool = False
 
 
+# Carrega todas as texturas do jogo e retorna um dicionário de IDs OpenGL.
 def carregar_texturas_jogo():
     return {
         "player": carregar_textura("assets/nicolas_cage.png"),
@@ -79,6 +84,7 @@ def carregar_texturas_jogo():
     }
 
 
+# Cria o estado inicial exibindo tela de início e fase 1 preparada.
 def criar_estado_inicial():
     fase = 1
     jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = reiniciar_jogo(fase)
@@ -96,6 +102,7 @@ def criar_estado_inicial():
     )
 
 
+# Reseta velocidades, câmera e temporizadores ligados à movimentação do jogador.
 def resetar_estado_movimento(jogo: EstadoJogo):
     jogo.velocidade_x = 0.0
     jogo.velocidade_y = 0.0
@@ -108,6 +115,7 @@ def resetar_estado_movimento(jogo: EstadoJogo):
     jogo.espaco_antes = False
 
 
+# Inicia uma nova partida do zero, reiniciando fase, vidas e pontuação.
 def iniciar_partida(jogo: EstadoJogo):
     jogo.estado = JOGANDO
     jogo.fase = 1
@@ -124,6 +132,7 @@ def iniciar_partida(jogo: EstadoJogo):
     ) = reiniciar_jogo(jogo.fase)
 
 
+# Lê o teclado e converte entrada horizontal para -1, 0 ou 1.
 def _entrada_horizontal(janela):
     esquerda = (
         glfw.get_key(janela, glfw.KEY_LEFT) == glfw.PRESS
@@ -140,6 +149,7 @@ def _entrada_horizontal(janela):
     return 0
 
 
+# Aplica aceleração e atrito para atualizar velocidade horizontal do jogador.
 def atualizar_movimento_horizontal(janela, jogo: EstadoJogo, delta_time: float):
     direcao_x = _entrada_horizontal(janela)
     if direcao_x != 0:
@@ -155,6 +165,7 @@ def atualizar_movimento_horizontal(janela, jogo: EstadoJogo, delta_time: float):
             jogo.velocidade_x = min(0.0, jogo.velocidade_x + ATRITO_PLAYER * delta_time)
 
 
+# Gerencia buffer de pulo e tempo coyote para melhorar responsividade do salto.
 def atualizar_buffer_pulo(janela, jogo: EstadoJogo, delta_time: float):
     espaco_agora = glfw.get_key(janela, glfw.KEY_SPACE) == glfw.PRESS
     if espaco_agora and not jogo.espaco_antes:
@@ -176,6 +187,7 @@ def atualizar_buffer_pulo(janela, jogo: EstadoJogo, delta_time: float):
         jogo.esta_no_chao = False
 
 
+# Atualiza física do jogador, resolve colisões e limita posição na fase.
 def atualizar_fisica_jogador(jogo: EstadoJogo, delta_time: float):
     deslocamento_x = jogo.velocidade_x * delta_time
     jogo.jogador.x += deslocamento_x
@@ -198,6 +210,7 @@ def atualizar_fisica_jogador(jogo: EstadoJogo, delta_time: float):
         jogo.velocidade_x = 0.0
 
 
+# Verifica se uma entidade está colidindo com algum bloco do mapa.
 def _colide_com_bloco(entidade, blocos: list[Block]):
     entidade_ret = entidade.retangulo()
     for bloco in blocos:
@@ -206,6 +219,7 @@ def _colide_com_bloco(entidade, blocos: list[Block]):
     return False
 
 
+# Atualiza movimento e direção dos inimigos conforme tipo e colisões.
 def atualizar_inimigos(jogo: EstadoJogo, delta_time: float):
     velocidade_base = 70 + jogo.fase * 12
     for inimigo in jogo.inimigos:
@@ -241,6 +255,7 @@ def atualizar_inimigos(jogo: EstadoJogo, delta_time: float):
                 inimigo.direcao = -1
 
 
+# Detecta coleta de moedas e soma pontos ao jogador.
 def coletar_moedas(jogo: EstadoJogo):
     jogador_ret = jogo.jogador.retangulo()
     for moeda in jogo.moedas[:]:
@@ -249,6 +264,7 @@ def coletar_moedas(jogo: EstadoJogo):
             jogo.moedas.remove(moeda)
 
 
+# Atualiza o temporizador de invencibilidade após receber dano.
 def atualizar_invencibilidade(jogo: EstadoJogo, delta_time: float):
     if jogo.tempo_invencivel > 0:
         jogo.tempo_invencivel -= delta_time
@@ -256,6 +272,7 @@ def atualizar_invencibilidade(jogo: EstadoJogo, delta_time: float):
             jogo.invencivel = False
 
 
+# Calcula hitbox de dano do inimigo com margem para colisão mais justa.
 def _retangulo_dano_inimigo(inimigo: Enemy):
     margem = MARGEM_COLISAO_ABELHA if inimigo.tipo == "abelha" else MARGEM_COLISAO_SAHUR
     largura = max(8.0, inimigo.w - margem * 2)
@@ -268,6 +285,7 @@ def _retangulo_dano_inimigo(inimigo: Enemy):
     ]
 
 
+# Aplica dano ao jogador ou elimina sahur ao pulo por cima.
 def aplicar_dano_inimigos(jogo: EstadoJogo):
     if jogo.invencivel:
         return
@@ -299,6 +317,7 @@ def aplicar_dano_inimigos(jogo: EstadoJogo):
             break
 
 
+# Processa queda fora do mapa, consumindo vida e reposicionando o jogador.
 def processar_queda(jogo: EstadoJogo):
     if jogo.jogador.y >= -120:
         return
@@ -319,6 +338,7 @@ def processar_queda(jogo: EstadoJogo):
     jogo.tempo_invencivel = 1.5
 
 
+# Avança para a próxima fase quando o jogador alcança o objetivo.
 def avancar_fase(jogo: EstadoJogo):
     if not retangulos_colidem(jogo.jogador.retangulo(), jogo.objetivo.retangulo()):
         return
@@ -340,6 +360,7 @@ def avancar_fase(jogo: EstadoJogo):
     ) = reiniciar_jogo(jogo.fase)
 
 
+# Centraliza a câmera no jogador respeitando limites da fase.
 def atualizar_camera(jogo: EstadoJogo):
     jogo.camera_x = jogo.jogador.x - 280
     if jogo.camera_x < 0:
@@ -349,6 +370,7 @@ def atualizar_camera(jogo: EstadoJogo):
         jogo.camera_x = camera_maxima
 
 
+# Executa o ciclo completo de atualização de gameplay no frame.
 def atualizar_jogo(janela, jogo: EstadoJogo, delta_time: float):
     atualizar_movimento_horizontal(janela, jogo, delta_time)
     atualizar_buffer_pulo(janela, jogo, delta_time)
@@ -362,6 +384,7 @@ def atualizar_jogo(janela, jogo: EstadoJogo, delta_time: float):
     atualizar_camera(jogo)
 
 
+# Renderiza fundo, mapa, jogador, HUD e telas de mensagem.
 def desenhar_frame(texturas, jogo: EstadoJogo, tempo_atual: float):
     desenhar_fundo(texturas["sky"], jogo.camera_x, tempo_atual)
     desenhar_mapa(
@@ -391,6 +414,7 @@ def desenhar_frame(texturas, jogo: EstadoJogo, tempo_atual: float):
         desenhar_tela_mensagem(jogo.estado, tempo_atual)
 
 
+# Ponto de entrada: configura GLFW/OpenGL e executa o loop principal do jogo.
 def main():
     if not glfw.init():
         return

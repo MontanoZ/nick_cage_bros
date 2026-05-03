@@ -1,12 +1,16 @@
+# Gerador de sprites pixel-art: cria e salva os arquivos PNG usados pelo jogo.
+
 from PIL import Image, ImageDraw
 
 TILE = 32
 
 
+# Salva imagem gerada no diretório de assets.
 def salvar(nome, img):
     img.save('assets/' + nome)
 
 
+# Desenha um retângulo preenchido auxiliar em pixel-art.
 def quad(draw, x, y, w, h, cor):
     draw.rectangle([x, y, x + w - 1, y + h - 1], fill=cor)
 

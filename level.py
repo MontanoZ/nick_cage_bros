@@ -1,3 +1,5 @@
+# Geração procedural de fases: plataformas, buracos, inimigos, moedas e ponto de objetivo.
+
 import random
 
 from collision import retangulos_colidem
@@ -32,10 +34,12 @@ TRECHO_CHAO_MIN_TILES = 5
 TRECHO_CHAO_MAX_TILES = 10
 
 
+# Verifica se dois intervalos numéricos se sobrepõem.
 def _intervalos_colidem(a_inicio, a_fim, b_inicio, b_fim):
     return a_inicio < b_fim and a_fim > b_inicio
 
 
+# Cria plataforma e adiciona áreas de proteção contra buracos nas bordas.
 def _adicionar_plataforma(plataformas, protecoes, x, nivel, largura_tiles):
     y = NIVEIS_PLATAFORMA[nivel]
     largura = largura_tiles * TAMANHO_TILE
@@ -47,6 +51,7 @@ def _adicionar_plataforma(plataformas, protecoes, x, nivel, largura_tiles):
         protecoes.append((x + largura - margem, x + largura + margem))
 
 
+# Checa se um intervalo toca uma zona protegida.
 def _intervalo_colide_com_protecao(inicio, fim, protecoes):
     for protecao_inicio, protecao_fim in protecoes:
         if _intervalos_colidem(inicio, fim, protecao_inicio, protecao_fim):
@@ -54,10 +59,12 @@ def _intervalo_colide_com_protecao(inicio, fim, protecoes):
     return False
 
 
+# Define chance de buraco com base na dificuldade.
 def _chance_buraco(dificuldade):
     return min(18 + dificuldade * 4, 58)
 
 
+# Calcula número mínimo de buracos para manter desafio da fase.
 def _quantidade_minima_buracos(comprimento, dificuldade):
     tiles_uteis = max(1, (comprimento - MARGEM_INICIO - MARGEM_FIM) // TAMANHO_TILE)
     quantidade_por_dificuldade = 2 + dificuldade // 2
@@ -65,11 +72,13 @@ def _quantidade_minima_buracos(comprimento, dificuldade):
     return max(quantidade_por_dificuldade, quantidade_por_comprimento)
 
 
+# Define distância mínima de chão entre buracos consecutivos.
 def _espaco_solido_entre_buracos(dificuldade):
     reducao = min(dificuldade // 3, 2) * TAMANHO_TILE
     return max(SOLIDO_ENTRE_BURACOS_MINIMO, SOLIDO_ENTRE_BURACOS_BASE - reducao)
 
 
+# Define tamanho máximo de buraco permitido na dificuldade atual.
 def _tamanho_maximo_buraco(dificuldade):
     if dificuldade < 3:
         return 1
@@ -78,6 +87,7 @@ def _tamanho_maximo_buraco(dificuldade):
     return BURACO_MAX_TAMANHO
 
 
+# Valida se um novo buraco pode ser criado sem quebrar regras de geração.
 def _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
     if _intervalo_colide_com_protecao(inicio, fim, protecoes):
         return False
@@ -89,6 +99,7 @@ def _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
     return True
 
 
+# Escolhe próximo nível de plataforma considerando espaço e dificuldade.
 def _escolher_nivel_proximo(nivel_atual, espaco_restante, dificuldade):
     if espaco_restante <= 10 * TAMANHO_TILE:
         return max(0, nivel_atual - 1)
@@ -107,6 +118,7 @@ def _escolher_nivel_proximo(nivel_atual, espaco_restante, dificuldade):
     return random.choices(niveis, weights=pesos, k=1)[0]
 
 
+# Define espaçamento horizontal entre plataformas consecutivas.
 def _espaco_entre_plataformas(nivel_atual, proximo_nivel, dificuldade):
     if proximo_nivel < nivel_atual:
         return random.randint(1, 2) * TAMANHO_TILE
@@ -117,6 +129,7 @@ def _espaco_entre_plataformas(nivel_atual, proximo_nivel, dificuldade):
     return random.randint(3, 5) * TAMANHO_TILE
 
 
+# Gera plataformas distribuídas proceduralmente ao longo da fase.
 def _gerar_plataformas(comprimento, dificuldade):
     plataformas = []
     protecoes = []
@@ -174,6 +187,7 @@ def _gerar_plataformas(comprimento, dificuldade):
     return plataformas, protecoes
 
 
+# Preenche o chão da fase ignorando trechos definidos como buraco.
 def _preencher_chao(comprimento, buracos):
     blocos = []
     x = 0
@@ -191,6 +205,7 @@ def _preencher_chao(comprimento, buracos):
     return blocos
 
 
+# Gera buracos no chão respeitando proteção e quantidade mínima.
 def _gerar_buracos(comprimento, dificuldade, protecoes):
     buracos = []
     x = 0
@@ -241,6 +256,7 @@ def _gerar_buracos(comprimento, dificuldade, protecoes):
     return buracos
 
 
+# Verifica se um retângulo colide com qualquer bloco do mapa.
 def _retangulo_colide_com_blocos(retangulo, blocos):
     for bloco in blocos:
         if retangulos_colidem(retangulo, bloco.retangulo()):
@@ -248,6 +264,7 @@ def _retangulo_colide_com_blocos(retangulo, blocos):
     return False
 
 
+# Agrupa blocos contínuos em segmentos úteis para spawn de sahur.
 def _segmentos_de_suporte(blocos: list[Block]):
     blocos_ordenados = sorted(blocos, key=lambda bloco: (bloco.y, bloco.x))
     segmentos = []
@@ -273,6 +290,7 @@ def _segmentos_de_suporte(blocos: list[Block]):
     return segmentos
 
 
+# Cria uma abelha em posição válida sem colisão com blocos.
 def _gerar_abelha_sem_colisao(comprimento, blocos):
     for _ in range(80):
         ex = random.randint(8, int(comprimento / TAMANHO_TILE) - 4) * TAMANHO_TILE
@@ -292,6 +310,7 @@ def _gerar_abelha_sem_colisao(comprimento, blocos):
     return None
 
 
+# Cria um sahur em suporte válido sem sobreposição com mapa e inimigos.
 def _gerar_sahur_sem_colisao(blocos, inimigos):
     largura, altura = TAMANHO_SAHUR
     suportes = _segmentos_de_suporte(blocos)
@@ -342,6 +361,7 @@ def _gerar_sahur_sem_colisao(blocos, inimigos):
     return None
 
 
+# Monta todos os elementos da fase conforme número e dificuldade.
 def criar_fase(numero_fase):
     blocos: list[Block] = []
     inimigos: list[Enemy] = []
@@ -393,6 +413,7 @@ def criar_fase(numero_fase):
     return blocos, inimigos, moedas, objetivo, float(comprimento)
 
 
+# Cria jogador e fase nova para reinício ou avanço de estágio.
 def reiniciar_jogo(numero_fase):
     blocos, inimigos, moedas, objetivo, comprimento = criar_fase(numero_fase)
     jogador = Player(80.0, 170.0, float(LARGURA_PLAYER), float(ALTURA_PLAYER))

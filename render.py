@@ -1,3 +1,5 @@
+# Camada de renderização OpenGL: texturas, desenhos 2D, HUD e telas de interface.
+
 import math
 from collections import OrderedDict
 from functools import lru_cache
@@ -13,6 +15,7 @@ _CACHE_TEXTO_MAX_ITENS = 128
 _cache_texturas_texto: "OrderedDict[tuple, tuple[int, int, int]]" = OrderedDict()
 
 
+# Carrega imagem do disco e cria textura OpenGL 2D.
 def carregar_textura(caminho):
     with Image.open(caminho) as imagem_original:
         if hasattr(Image, "Transpose"):
@@ -44,6 +47,8 @@ def carregar_textura(caminho):
 
 
 @lru_cache(maxsize=16)
+
+# Carrega e cacheia fontes para renderização de texto via PIL.
 def _carregar_fonte(tamanho, negrito=False):
     candidatos = [
         "DejaVuSans-Bold.ttf" if negrito else "DejaVuSans.ttf",
@@ -64,6 +69,7 @@ def _carregar_fonte(tamanho, negrito=False):
     return ImageFont.load_default()
 
 
+# Converte imagem PIL em textura OpenGL para uso em texto.
 def _uploadar_imagem_como_textura(imagem):
     if hasattr(Image, "Transpose"):
         imagem = imagem.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
@@ -91,6 +97,7 @@ def _uploadar_imagem_como_textura(imagem):
     return textura_id
 
 
+# Converte canais de cor de 0..1 para 0..255 com clamp.
 def _normalizar_cor_rgba(r, g, b, a):
     return (
         max(0, min(255, int(r * 255))),
@@ -100,6 +107,7 @@ def _normalizar_cor_rgba(r, g, b, a):
     )
 
 
+# Gera ou recupera textura cacheada para uma string de texto.
 def _obter_textura_texto_cacheada(texto, tamanho, r, g, b, a, negrito):
     tamanho_fonte = max(8, int(tamanho))
     cor = _normalizar_cor_rgba(r, g, b, a)
@@ -136,6 +144,7 @@ def _obter_textura_texto_cacheada(texto, tamanho, r, g, b, a, negrito):
     return entrada
 
 
+# Desenha texto na tela usando textura gerada por fonte.
 def desenhar_texto_fonte(texto, x, y, tamanho, r, g, b, a=1.0, centralizado=False, negrito=False):
     if not texto:
         return
@@ -148,6 +157,7 @@ def desenhar_texto_fonte(texto, x, y, tamanho, r, g, b, a=1.0, centralizado=Fals
     desenhar_quad_textura(textura, quad_x, quad_y, largura, altura)
 
 
+# Libera texturas OpenGL do jogo e limpa cache de texto.
 def liberar_texturas(texturas):
     ids = [textura_id for textura_id in texturas.values() if textura_id]
     if ids:
@@ -157,6 +167,7 @@ def liberar_texturas(texturas):
         _cache_texturas_texto.clear()
 
 
+# Configura viewport, projeção ortográfica e blending.
 def configurar_opengl():
     glViewport(0, 0, LARGURA, ALTURA)
     glMatrixMode(GL_PROJECTION)
@@ -168,6 +179,7 @@ def configurar_opengl():
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
 
+# Desenha um retângulo texturizado nas coordenadas informadas.
 def desenhar_quad_textura(textura, x, y, largura, altura):
     glEnable(GL_TEXTURE_2D)
     glBindTexture(GL_TEXTURE_2D, textura)
@@ -185,6 +197,7 @@ def desenhar_quad_textura(textura, x, y, largura, altura):
     glDisable(GL_TEXTURE_2D)
 
 
+# Desenha um retângulo sólido RGB sem textura.
 def desenhar_quad_cor(x, y, largura, altura, r, g, b):
     glDisable(GL_TEXTURE_2D)
     glColor3f(r, g, b)
@@ -196,6 +209,7 @@ def desenhar_quad_cor(x, y, largura, altura, r, g, b):
     glEnd()
 
 
+# Desenha um retângulo sólido com canal alpha.
 def desenhar_quad_rgba(x, y, largura, altura, r, g, b, a):
     glDisable(GL_TEXTURE_2D)
     glColor4f(r, g, b, a)
@@ -207,6 +221,7 @@ def desenhar_quad_rgba(x, y, largura, altura, r, g, b, a):
     glEnd()
 
 
+# Desenha um círculo preenchido usando triângulos em leque.
 def desenhar_circulo(x, y, raio, r, g, b, a=1.0, segmentos=24):
     glDisable(GL_TEXTURE_2D)
     glColor4f(r, g, b, a)
@@ -218,6 +233,7 @@ def desenhar_circulo(x, y, raio, r, g, b, a=1.0, segmentos=24):
     glEnd()
 
 
+# Desenha uma nuvem estilizada combinando círculos e retângulo.
 def desenhar_nuvem(x, y, escala, alpha=0.82):
     desenhar_circulo(x, y, 16 * escala, 1.0, 1.0, 1.0, alpha)
     desenhar_circulo(x + 18 * escala, y + 7 * escala, 22 * escala, 1.0, 1.0, 1.0, alpha)
@@ -225,6 +241,7 @@ def desenhar_nuvem(x, y, escala, alpha=0.82):
     desenhar_quad_rgba(x - 4 * escala, y - 11 * escala, 56 * escala, 20 * escala, 1.0, 1.0, 1.0, alpha)
 
 
+# Desenha uma montanha triangular para o cenário de fundo.
 def desenhar_montanha(base_x, altura, largura, r, g, b):
     glDisable(GL_TEXTURE_2D)
     glColor3f(r, g, b)
@@ -235,6 +252,7 @@ def desenhar_montanha(base_x, altura, largura, r, g, b):
     glEnd()
 
 
+# Renderiza céu, sol, nuvens, montanhas e vegetação com parallax.
 def desenhar_fundo(textura_sky, camera_x, tempo):
     glClearColor(0.44, 0.73, 0.98, 1)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -288,6 +306,7 @@ def desenhar_fundo(textura_sky, camera_x, tempo):
     desenhar_quad_rgba(0, 24, LARGURA, 8, 0.18, 0.48, 0.21, 1.0)
 
 
+# Desenha blocos, moedas, inimigos e objetivo da fase.
 def desenhar_mapa(
     texturas,
     blocos: list[Block],
@@ -324,6 +343,7 @@ def desenhar_mapa(
     )
 
 
+# Desenha jogador, sombra e efeito visual de invencibilidade.
 def desenhar_jogador(texturas, jogador: Player, camera_x, invencivel, tempo):
     if invencivel and int(tempo * 12) % 2 == 0:
         return
@@ -343,10 +363,12 @@ def desenhar_jogador(texturas, jogador: Player, camera_x, invencivel, tempo):
     )
 
 
+# Renderiza número estilizado para HUD.
 def desenhar_numero(valor, x, y, escala):
     desenhar_texto_fonte(str(valor), x, y, 24 * escala, 1.0, 0.92, 0.25, 1.0, negrito=True)
 
 
+# Desenha ícone de coração para indicador de vidas.
 def desenhar_coracao(x, y, escala, brilho=1.0):
     cor = (0.92 * brilho, 0.15 * brilho, 0.22 * brilho)
     desenhar_circulo(x + 8 * escala, y + 14 * escala, 8 * escala, *cor, 1.0)
@@ -360,6 +382,7 @@ def desenhar_coracao(x, y, escala, brilho=1.0):
     glEnd()
 
 
+# Desenha ícone de moeda para indicador de pontos.
 def desenhar_moeda(x, y, escala, brilho=1.0):
     desenhar_circulo(x + 12 * escala, y + 12 * escala, 11 * escala, 1.0, 0.84, 0.22, 0.95)
     desenhar_circulo(x + 12 * escala, y + 12 * escala, 7 * escala, 1.0, 0.96, 0.55, 1.0)
@@ -375,6 +398,7 @@ def desenhar_moeda(x, y, escala, brilho=1.0):
     )
 
 
+# Desenha HUD com vidas, pontos, fase e barra de progresso.
 def desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo):
     brilho = 0.5 + 0.5 * math.sin(tempo * 4.0)
     desenhar_quad_rgba(12, ALTURA - 78, LARGURA - 24, 64, 0.02, 0.04, 0.08, 0.70)
@@ -415,6 +439,7 @@ def desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo):
 
 
 
+# Desenha overlay da tela inicial com instruções de controle.
 def desenhar_tela_inicio(tempo):
     box_w = 640
     box_h = 314
@@ -457,6 +482,7 @@ def desenhar_tela_inicio(tempo):
     desenhar_texto_fonte("PRESSIONE ENTER PARA INICIAR", texto_x, cta_y, 24, 0.98, 0.86, 0.34, 0.90 + brilho_cta * 0.10, centralizado=True, negrito=True)
 
 
+# Desenha overlay de fim de jogo com opção de reinício.
 def desenhar_tela_game_over(tempo):
     box_w = 340
     box_h = 214
@@ -479,6 +505,7 @@ def desenhar_tela_game_over(tempo):
     desenhar_texto_fonte("ENTER : REINICIAR", texto_x, texto_secundario_y, 20, 1.0, 0.92, 0.55, 1.0, centralizado=True, negrito=True)
     desenhar_texto_fonte("VOCE PERDEU", texto_x, texto_principal_y, 22, 0.98, 0.88, 0.60, 0.95, centralizado=True)
 
+# Seleciona e desenha a tela de mensagem conforme estado atual.
 def desenhar_tela_mensagem(estado, tempo):
     if estado == TELA_INICIO:
         desenhar_tela_inicio(tempo)

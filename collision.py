@@ -1,6 +1,9 @@
+# Regras de colisão do jogo: detecção entre retângulos e resolução de colisões do jogador.
+
 from models import Block, Player
 
 
+# Verifica sobreposição entre dois retângulos axis-aligned.
 def retangulos_colidem(a, b):
     if a[0] + a[2] <= b[0]:
         return False
@@ -13,6 +16,7 @@ def retangulos_colidem(a, b):
     return True
 
 
+# Resolve colisões verticais do jogador com blocos e detecta chão.
 def resolver_colisao_vertical(jogador: Player, blocos: list[Block], velocidade_y: float):
     esta_no_chao = False
     jogador_ret = jogador.retangulo()
@@ -29,6 +33,7 @@ def resolver_colisao_vertical(jogador: Player, blocos: list[Block], velocidade_y
     return velocidade_y, esta_no_chao
 
 
+# Resolve colisões horizontais do jogador com blocos.
 def resolver_colisao_horizontal(
     jogador: Player, blocos: list[Block], deslocamento_x: float
 ):

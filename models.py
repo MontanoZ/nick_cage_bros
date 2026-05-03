@@ -1,3 +1,5 @@
+# Modelos de dados do jogo: entidades, jogador, blocos, moedas, objetivo e inimigos.
+
 from dataclasses import dataclass
 from typing import Literal
 
@@ -5,6 +7,7 @@ EnemyKind = Literal["abelha", "sahur"]
 
 
 @dataclass
+
 class Entidade:
     x: float
     y: float
@@ -16,26 +19,31 @@ class Entidade:
 
 
 @dataclass
+
 class Player(Entidade):
     pass
 
 
 @dataclass
+
 class Block(Entidade):
     tipo: int = 0
 
 
 @dataclass
+
 class Coin(Entidade):
     pass
 
 
 @dataclass
+
 class Goal(Entidade):
     pass
 
 
 @dataclass
+
 class Enemy(Entidade):
     tipo: EnemyKind
     direcao: int
