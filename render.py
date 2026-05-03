@@ -177,7 +177,7 @@ def desenhar_mapa(texturas, blocos, inimigos, moedas, objetivo, camera_x):
         desenhar_quad_textura(texturas["coin"], moeda[0] - camera_x, moeda[1], moeda[2], moeda[3])
 
     for inimigo in inimigos:
-        desenhar_quad_textura(texturas["bee"], inimigo[0] - camera_x, inimigo[1], inimigo[2], inimigo[3])
+        desenhar_quad_textura(texturas["bee"], inimigo["x"] - camera_x, inimigo["y"], inimigo["w"], inimigo["h"])
 
     desenhar_quad_textura(texturas["chest"], objetivo[0] - camera_x, objetivo[1], objetivo[2], objetivo[3])
 

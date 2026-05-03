@@ -1,5 +1,6 @@
 import random
 
+from collision import retangulos_colidem
 from settings import (
     ALTURAS_PLATAFORMA,
     LARGURA_MAX_PLATAFORMA,
@@ -28,6 +29,11 @@ PADROES_SEGMENTO = (
     (0, 1),
     (0, 1, 2),
 )
+NIVEIS_VOO_ABELHA = (TAMANHO_TILE, ALTURAS_PLATAFORMA[0])
+TAMANHO_ABELHA = 40
+TAMANHO_SAHUR = (44, 66)
+TRECHO_CHAO_MIN_TILES = 5
+TRECHO_CHAO_MAX_TILES = 10
 
 
 def _intervalos_colidem(a_inicio, a_fim, b_inicio, b_fim):
@@ -194,7 +200,27 @@ def _gerar_plataformas(comprimento, dificuldade):
     x = MARGEM_INICIO
     limite_util = comprimento - MARGEM_FIM
     nivel_atual = 0
+    passou_por_trecho_chao = False
     while x < limite_util:
+        # Forca momentos de retorno ao chao para variar o ritmo da fase.
+        if not passou_por_trecho_chao and x > comprimento * 0.45:
+            tamanho_trecho_chao = random.randint(
+                TRECHO_CHAO_MIN_TILES, TRECHO_CHAO_MAX_TILES
+            )
+            x += tamanho_trecho_chao * TAMANHO_TILE
+            nivel_atual = 0
+            passou_por_trecho_chao = True
+            continue
+
+        chance_trecho_chao = min(10 + dificuldade * 2, 32)
+        if random.randint(0, 100) < chance_trecho_chao:
+            tamanho_trecho_chao = random.randint(
+                TRECHO_CHAO_MIN_TILES, TRECHO_CHAO_MAX_TILES
+            )
+            x += tamanho_trecho_chao * TAMANHO_TILE
+            nivel_atual = 0
+            continue
+
         espaco_restante = limite_util - x
         if espaco_restante < 6 * TAMANHO_TILE:
             nivel_atual = 0
@@ -288,6 +314,82 @@ def _gerar_buracos(comprimento, dificuldade, protecoes):
     return buracos
 
 
+def _retangulo_colide_com_blocos(retangulo, blocos):
+    for bloco in blocos:
+        if retangulos_colidem(retangulo, bloco):
+            return True
+    return False
+
+
+def _gerar_abelha_sem_colisao(comprimento, blocos):
+    for _ in range(80):
+        ex = random.randint(8, int(comprimento / TAMANHO_TILE) - 4) * TAMANHO_TILE
+        ey_base = random.choice(NIVEIS_VOO_ABELHA)
+        abelha = {
+            "tipo": "abelha",
+            "x": ex,
+            "y": ey_base,
+            "w": TAMANHO_ABELHA,
+            "h": TAMANHO_ABELHA,
+            "dir": random.choice([-1, 1]),
+            "tempo": 0.0,
+            "base_y": ey_base,
+        }
+        if not _retangulo_colide_com_blocos(
+            [abelha["x"], abelha["y"], abelha["w"], abelha["h"]], blocos
+        ):
+            return abelha
+    return None
+
+
+def _gerar_sahur_sem_colisao(comprimento, blocos, inimigos):
+    largura, altura = TAMANHO_SAHUR
+    suportes = [bloco for bloco in blocos if bloco[4] == 0 or bloco[4] == 1]
+    random.shuffle(suportes)
+
+    for suporte in suportes[:220]:
+        if suporte[2] < largura:
+            continue
+
+        min_x = int(suporte[0] + 4)
+        max_x = int(suporte[0] + suporte[2] - largura - 4)
+        if max_x <= min_x:
+            continue
+
+        sx = random.randint(min_x, max_x)
+        sy = suporte[1] + suporte[3]
+        sahur_ret = [sx, sy, largura, altura]
+        if _retangulo_colide_com_blocos(sahur_ret, blocos):
+            continue
+
+        colide_inimigo = False
+        for inimigo in inimigos:
+            inimigo_ret = [inimigo["x"], inimigo["y"], inimigo["w"], inimigo["h"]]
+            if retangulos_colidem(sahur_ret, inimigo_ret):
+                colide_inimigo = True
+                break
+        if colide_inimigo:
+            continue
+
+        limite_esquerda = max(suporte[0] + 2, sx - 3 * TAMANHO_TILE)
+        limite_direita = min(suporte[0] + suporte[2] - largura - 2, sx + 3 * TAMANHO_TILE)
+        if limite_direita - limite_esquerda < TAMANHO_TILE:
+            continue
+
+        return {
+            "tipo": "sahur",
+            "x": float(sx),
+            "y": float(sy),
+            "w": largura,
+            "h": altura,
+            "dir": random.choice([-1, 1]),
+            "limite_esquerda": float(limite_esquerda),
+            "limite_direita": float(limite_direita),
+        }
+
+    return None
+
+
 def criar_fase(numero_fase):
     blocos = []
     inimigos = []
@@ -306,10 +408,20 @@ def criar_fase(numero_fase):
         moedas.append([plataforma[0] + TAMANHO_TILE, plataforma[1] + 60, 24, 24])
 
     quantidade_inimigos = min(4 + dificuldade * 2, MAX_INIMIGOS)
-    for i in range(quantidade_inimigos):
-        ex = random.randint(8, int(comprimento / TAMANHO_TILE) - 4) * TAMANHO_TILE
-        ey = random.choice([TAMANHO_TILE, 112, 170])
-        inimigos.append([ex, ey, 40, 40, random.choice([-1, 1]), 0])
+    quantidade_sahur = min(max(1, dificuldade // 2), max(2, MAX_INIMIGOS // 3))
+    tentativas_sem_colisao = 0
+    while len(inimigos) < quantidade_inimigos and tentativas_sem_colisao < quantidade_inimigos * 4:
+        abelha = _gerar_abelha_sem_colisao(comprimento, blocos)
+        if abelha is not None:
+            inimigos.append(abelha)
+        tentativas_sem_colisao += 1
+
+    tentativas_sahur = 0
+    while len([i for i in inimigos if i["tipo"] == "sahur"]) < quantidade_sahur and tentativas_sahur < quantidade_sahur * 8:
+        sahur = _gerar_sahur_sem_colisao(comprimento, blocos, inimigos)
+        if sahur is not None:
+            inimigos.append(sahur)
+        tentativas_sahur += 1
 
     objetivo = [comprimento - 160, TAMANHO_TILE, 64, 64]
     return blocos, inimigos, moedas, objetivo, comprimento

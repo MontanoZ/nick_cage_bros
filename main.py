@@ -35,6 +35,8 @@ from settings import (
     VIDAS_INICIAIS,
 )
 
+MARGEM_COLISAO_ABELHA = 10
+
 
 def main():
     if not glfw.init():
@@ -186,12 +188,12 @@ def main():
 
             for inimigo in inimigos:
                 velocidade_inimigo = 70 + fase * 12
-                x_anterior = inimigo[0]
-                y_anterior = inimigo[1]
-                inimigo[0] += inimigo[4] * velocidade_inimigo * delta_time
-                inimigo[5] += delta_time
-                inimigo[1] += np.sin(inimigo[5] * 3.0) * 12.0 * delta_time
-                inimigo_ret = [inimigo[0], inimigo[1], inimigo[2], inimigo[3]]
+                x_anterior = inimigo["x"]
+                y_anterior = inimigo["y"]
+                inimigo["x"] += inimigo["dir"] * velocidade_inimigo * delta_time
+                inimigo["tempo"] += delta_time
+                inimigo["y"] += np.sin(inimigo["tempo"] * 3.0) * 12.0 * delta_time
+                inimigo_ret = [inimigo["x"], inimigo["y"], inimigo["w"], inimigo["h"]]
                 bateu_em_bloco = False
                 for bloco in blocos:
                     if retangulos_colidem(inimigo_ret, bloco):
@@ -199,16 +201,16 @@ def main():
                         break
 
                 if bateu_em_bloco:
-                    inimigo[0] = x_anterior
-                    inimigo[1] = y_anterior
-                    inimigo[4] *= -1
+                    inimigo["x"] = x_anterior
+                    inimigo["y"] = y_anterior
+                    inimigo["dir"] *= -1
                 else:
-                    if inimigo[0] < 100:
-                        inimigo[0] = 100
-                        inimigo[4] = 1
-                    if inimigo[0] > comprimento_fase - 200:
-                        inimigo[0] = comprimento_fase - 200
-                        inimigo[4] = -1
+                    if inimigo["x"] < 100:
+                        inimigo["x"] = 100
+                        inimigo["dir"] = 1
+                    if inimigo["x"] > comprimento_fase - 200:
+                        inimigo["x"] = comprimento_fase - 200
+                        inimigo["dir"] = -1
 
             for moeda in moedas[:]:
                 if retangulos_colidem(jogador_ret, moeda):
@@ -221,7 +223,13 @@ def main():
                     invencivel = False
 
             for inimigo in inimigos:
-                if retangulos_colidem(jogador_ret, inimigo):
+                inimigo_dano = [
+                    inimigo["x"] + MARGEM_COLISAO_ABELHA,
+                    inimigo["y"] + MARGEM_COLISAO_ABELHA,
+                    inimigo["w"] - MARGEM_COLISAO_ABELHA * 2,
+                    inimigo["h"] - MARGEM_COLISAO_ABELHA * 2,
+                ]
+                if retangulos_colidem(jogador_ret, inimigo_dano):
                     if not invencivel:
                         vidas -= 1
                         invencivel = True
