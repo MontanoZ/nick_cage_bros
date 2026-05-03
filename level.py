@@ -1,12 +1,13 @@
 import random
 
 from collision import retangulos_colidem
+from models import Block, Coin, Enemy, Goal, Player
 from settings import (
+    ALTURA_PLAYER,
     ALTURAS_PLATAFORMA,
     LARGURA_MAX_PLATAFORMA,
     LARGURA_MIN_PLATAFORMA,
     LARGURA_PLAYER,
-    ALTURA_PLAYER,
     MAX_FASE_DIFICULDADE,
     MAX_INIMIGOS,
     TAMANHO_TILE,
@@ -24,11 +25,6 @@ MARGEM_PROTECAO_PLATAFORMA = {
     1: TAMANHO_TILE // 2,
     0: TAMANHO_TILE // 2,
 }
-PADROES_SEGMENTO = (
-    (0,),
-    (0, 1),
-    (0, 1, 2),
-)
 NIVEIS_VOO_ABELHA = (TAMANHO_TILE, ALTURAS_PLATAFORMA[0])
 TAMANHO_ABELHA = 40
 TAMANHO_SAHUR = (44, 66)
@@ -43,7 +39,7 @@ def _intervalos_colidem(a_inicio, a_fim, b_inicio, b_fim):
 def _adicionar_plataforma(plataformas, protecoes, x, nivel, largura_tiles):
     y = NIVEIS_PLATAFORMA[nivel]
     largura = largura_tiles * TAMANHO_TILE
-    plataforma = [x, y, largura, TAMANHO_TILE, 1]
+    plataforma = Block(float(x), float(y), float(largura), float(TAMANHO_TILE), tipo=1)
     plataformas.append(plataforma)
     margem = MARGEM_PROTECAO_PLATAFORMA[nivel]
     if margem > 0:
@@ -91,22 +87,6 @@ def _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
             return False
 
     return True
-
-
-def _escolher_padrao_segmento(dificuldade):
-    pesos = []
-    for padrao in PADROES_SEGMENTO:
-        if len(padrao) == 1:
-            peso = 8 + dificuldade
-        elif len(padrao) == 2:
-            if padrao == (0, 1):
-                peso = 28 + dificuldade
-            else:
-                peso = 22 + dificuldade
-        else:
-            peso = 18 + dificuldade
-        pesos.append(peso)
-    return random.choices(PADROES_SEGMENTO, weights=pesos, k=1)[0]
 
 
 def _gerar_trecho_plataformas(plataformas, protecoes, x, nivel, limite_x, dificuldade):
@@ -162,38 +142,6 @@ def _espaco_entre_plataformas(nivel_atual, proximo_nivel, dificuldade):
     return random.randint(3, 5) * TAMANHO_TILE
 
 
-def _gerar_segmento(plataformas, protecoes, x, limite_x, dificuldade):
-    padrao = _escolher_padrao_segmento(dificuldade)
-    niveis = list(padrao)
-    if len(niveis) == 1:
-        return _gerar_trecho_plataformas(plataformas, protecoes, x, niveis[0], limite_x, dificuldade)
-
-    espaco_total = max(TAMANHO_TILE * 8, limite_x - x)
-    if len(niveis) == 2:
-        cortes = [random.uniform(0.42, 0.60)]
-    else:
-        cortes = sorted([random.uniform(0.28, 0.42), random.uniform(0.58, 0.78)])
-
-    limites = [x]
-    for corte in cortes:
-        limites.append(int(x + espaco_total * corte))
-    limites.append(limite_x)
-
-    x_atual = x
-    for indice, nivel in enumerate(niveis):
-        x_atual = _gerar_trecho_plataformas(
-            plataformas,
-            protecoes,
-            x_atual,
-            nivel,
-            limites[indice + 1],
-            dificuldade,
-        )
-        if indice < len(niveis) - 1:
-            x_atual += random.randint(1, 2) * TAMANHO_TILE
-    return x_atual
-
-
 def _gerar_plataformas(comprimento, dificuldade):
     plataformas = []
     protecoes = []
@@ -202,7 +150,6 @@ def _gerar_plataformas(comprimento, dificuldade):
     nivel_atual = 0
     passou_por_trecho_chao = False
     while x < limite_util:
-        # Forca momentos de retorno ao chao para variar o ritmo da fase.
         if not passou_por_trecho_chao and x > comprimento * 0.45:
             tamanho_trecho_chao = random.randint(
                 TRECHO_CHAO_MIN_TILES, TRECHO_CHAO_MAX_TILES
@@ -257,11 +204,14 @@ def _preencher_chao(comprimento, buracos):
     x = 0
     indice_buraco = 0
     while x < comprimento:
-        if indice_buraco < len(buracos) and buracos[indice_buraco][0] <= x < buracos[indice_buraco][1]:
+        if (
+            indice_buraco < len(buracos)
+            and buracos[indice_buraco][0] <= x < buracos[indice_buraco][1]
+        ):
             x = buracos[indice_buraco][1]
             indice_buraco += 1
             continue
-        blocos.append([x, 0, TAMANHO_TILE, TAMANHO_TILE, 0])
+        blocos.append(Block(float(x), 0.0, float(TAMANHO_TILE), float(TAMANHO_TILE), tipo=0))
         x += TAMANHO_TILE
     return blocos
 
@@ -279,7 +229,9 @@ def _gerar_buracos(comprimento, dificuldade, protecoes):
         pode_criar_buraco = x - ultimo_fim_buraco >= espaco_solido
         chance_buraco = _chance_buraco(dificuldade)
         if pode_criar_buraco and random.randint(0, 100) < chance_buraco:
-            tamanho_buraco = random.randint(BURACO_MIN_TAMANHO, _tamanho_maximo_buraco(dificuldade))
+            tamanho_buraco = random.randint(
+                BURACO_MIN_TAMANHO, _tamanho_maximo_buraco(dificuldade)
+            )
             inicio = x
             fim = x + tamanho_buraco * TAMANHO_TILE
             if _pode_adicionar_buraco(inicio, fim, buracos, protecoes, espaco_solido):
@@ -316,84 +268,109 @@ def _gerar_buracos(comprimento, dificuldade, protecoes):
 
 def _retangulo_colide_com_blocos(retangulo, blocos):
     for bloco in blocos:
-        if retangulos_colidem(retangulo, bloco):
+        if retangulos_colidem(retangulo, bloco.retangulo()):
             return True
     return False
+
+
+def _segmentos_de_suporte(blocos: list[Block]):
+    blocos_ordenados = sorted(blocos, key=lambda bloco: (bloco.y, bloco.x))
+    segmentos = []
+    indice = 0
+    while indice < len(blocos_ordenados):
+        bloco = blocos_ordenados[indice]
+        y = bloco.y
+        inicio = bloco.x
+        fim = bloco.x + bloco.w
+        indice += 1
+
+        while indice < len(blocos_ordenados):
+            proximo = blocos_ordenados[indice]
+            if proximo.y != y:
+                break
+            if proximo.x > fim + 0.5:
+                break
+            fim = max(fim, proximo.x + proximo.w)
+            indice += 1
+
+        segmentos.append((inicio, fim, y + bloco.h))
+
+    return segmentos
 
 
 def _gerar_abelha_sem_colisao(comprimento, blocos):
     for _ in range(80):
         ex = random.randint(8, int(comprimento / TAMANHO_TILE) - 4) * TAMANHO_TILE
         ey_base = random.choice(NIVEIS_VOO_ABELHA)
-        abelha = {
-            "tipo": "abelha",
-            "x": ex,
-            "y": ey_base,
-            "w": TAMANHO_ABELHA,
-            "h": TAMANHO_ABELHA,
-            "dir": random.choice([-1, 1]),
-            "tempo": 0.0,
-            "base_y": ey_base,
-        }
-        if not _retangulo_colide_com_blocos(
-            [abelha["x"], abelha["y"], abelha["w"], abelha["h"]], blocos
-        ):
+        abelha = Enemy(
+            tipo="abelha",
+            x=float(ex),
+            y=float(ey_base),
+            w=float(TAMANHO_ABELHA),
+            h=float(TAMANHO_ABELHA),
+            direcao=random.choice([-1, 1]),
+            tempo=0.0,
+            base_y=float(ey_base),
+        )
+        if not _retangulo_colide_com_blocos(abelha.retangulo(), blocos):
             return abelha
     return None
 
 
-def _gerar_sahur_sem_colisao(comprimento, blocos, inimigos):
+def _gerar_sahur_sem_colisao(blocos, inimigos):
     largura, altura = TAMANHO_SAHUR
-    suportes = [bloco for bloco in blocos if bloco[4] == 0 or bloco[4] == 1]
+    suportes = _segmentos_de_suporte(blocos)
     random.shuffle(suportes)
 
-    for suporte in suportes[:220]:
-        if suporte[2] < largura:
+    for suporte_inicio, suporte_fim, suporte_topo in suportes[:220]:
+        largura_suporte = suporte_fim - suporte_inicio
+        if largura_suporte < largura + 8:
             continue
 
-        min_x = int(suporte[0] + 4)
-        max_x = int(suporte[0] + suporte[2] - largura - 4)
+        min_x = int(suporte_inicio + 4)
+        max_x = int(suporte_fim - largura - 4)
         if max_x <= min_x:
             continue
 
         sx = random.randint(min_x, max_x)
-        sy = suporte[1] + suporte[3]
+        sy = suporte_topo
         sahur_ret = [sx, sy, largura, altura]
         if _retangulo_colide_com_blocos(sahur_ret, blocos):
             continue
 
         colide_inimigo = False
         for inimigo in inimigos:
-            inimigo_ret = [inimigo["x"], inimigo["y"], inimigo["w"], inimigo["h"]]
-            if retangulos_colidem(sahur_ret, inimigo_ret):
+            if retangulos_colidem(sahur_ret, inimigo.retangulo()):
                 colide_inimigo = True
                 break
         if colide_inimigo:
             continue
 
-        limite_esquerda = max(suporte[0] + 2, sx - 3 * TAMANHO_TILE)
-        limite_direita = min(suporte[0] + suporte[2] - largura - 2, sx + 3 * TAMANHO_TILE)
+        limite_esquerda = max(suporte_inicio + 2, sx - 3 * TAMANHO_TILE)
+        limite_direita = min(suporte_fim - largura - 2, sx + 3 * TAMANHO_TILE)
         if limite_direita - limite_esquerda < TAMANHO_TILE:
             continue
 
-        return {
-            "tipo": "sahur",
-            "x": float(sx),
-            "y": float(sy),
-            "w": largura,
-            "h": altura,
-            "dir": random.choice([-1, 1]),
-            "limite_esquerda": float(limite_esquerda),
-            "limite_direita": float(limite_direita),
-        }
+        return Enemy(
+            tipo="sahur",
+            x=float(sx),
+            y=float(sy),
+            w=float(largura),
+            h=float(altura),
+            direcao=random.choice([-1, 1]),
+            tempo=0.0,
+            base_y=float(sy),
+            limite_esquerda=float(limite_esquerda),
+            limite_direita=float(limite_direita),
+        )
 
     return None
 
 
 def criar_fase(numero_fase):
-    blocos = []
-    inimigos = []
-    moedas = []
+    blocos: list[Block] = []
+    inimigos: list[Enemy] = []
+    moedas: list[Coin] = []
 
     dificuldade = min(max(1, numero_fase), MAX_FASE_DIFICULDADE)
     comprimento = 2300 + dificuldade * 450
@@ -402,32 +379,46 @@ def criar_fase(numero_fase):
     blocos.extend(_preencher_chao(comprimento, buracos))
 
     for plataforma in plataformas:
-        tamanho = int(plataforma[2] / TAMANHO_TILE)
+        tamanho = int(plataforma.w / TAMANHO_TILE)
         for j in range(tamanho):
-            blocos.append([plataforma[0] + j * TAMANHO_TILE, plataforma[1], TAMANHO_TILE, TAMANHO_TILE, 1])
-        moedas.append([plataforma[0] + TAMANHO_TILE, plataforma[1] + 60, 24, 24])
+            blocos.append(
+                Block(
+                    plataforma.x + j * TAMANHO_TILE,
+                    plataforma.y,
+                    float(TAMANHO_TILE),
+                    float(TAMANHO_TILE),
+                    tipo=1,
+                )
+            )
+        moedas.append(Coin(plataforma.x + TAMANHO_TILE, plataforma.y + 60, 24.0, 24.0))
 
     quantidade_inimigos = min(4 + dificuldade * 2, MAX_INIMIGOS)
     quantidade_sahur = min(max(1, dificuldade // 2), max(2, MAX_INIMIGOS // 3))
     tentativas_sem_colisao = 0
-    while len(inimigos) < quantidade_inimigos and tentativas_sem_colisao < quantidade_inimigos * 4:
+    while (
+        len(inimigos) < quantidade_inimigos
+        and tentativas_sem_colisao < quantidade_inimigos * 4
+    ):
         abelha = _gerar_abelha_sem_colisao(comprimento, blocos)
         if abelha is not None:
             inimigos.append(abelha)
         tentativas_sem_colisao += 1
 
     tentativas_sahur = 0
-    while len([i for i in inimigos if i["tipo"] == "sahur"]) < quantidade_sahur and tentativas_sahur < quantidade_sahur * 8:
-        sahur = _gerar_sahur_sem_colisao(comprimento, blocos, inimigos)
+    while (
+        len([i for i in inimigos if i.tipo == "sahur"]) < quantidade_sahur
+        and tentativas_sahur < quantidade_sahur * 8
+    ):
+        sahur = _gerar_sahur_sem_colisao(blocos, inimigos)
         if sahur is not None:
             inimigos.append(sahur)
         tentativas_sahur += 1
 
-    objetivo = [comprimento - 160, TAMANHO_TILE, 64, 64]
-    return blocos, inimigos, moedas, objetivo, comprimento
+    objetivo = Goal(float(comprimento - 160), float(TAMANHO_TILE), 64.0, 64.0)
+    return blocos, inimigos, moedas, objetivo, float(comprimento)
 
 
 def reiniciar_jogo(numero_fase):
     blocos, inimigos, moedas, objetivo, comprimento = criar_fase(numero_fase)
-    jogador = [80, 170, LARGURA_PLAYER, ALTURA_PLAYER]
+    jogador = Player(80.0, 170.0, float(LARGURA_PLAYER), float(ALTURA_PLAYER))
     return jogador, blocos, inimigos, moedas, objetivo, comprimento

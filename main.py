@@ -1,7 +1,8 @@
+import math
 import time
+from dataclasses import dataclass
 
 import glfw
-import numpy as np
 
 from collision import (
     resolver_colisao_horizontal,
@@ -9,6 +10,7 @@ from collision import (
     retangulos_colidem,
 )
 from level import reiniciar_jogo
+from models import Block, Coin, Enemy, Goal, Player
 from render import (
     carregar_textura,
     configurar_opengl,
@@ -17,15 +19,16 @@ from render import (
     desenhar_jogador,
     desenhar_mapa,
     desenhar_tela_mensagem,
+    liberar_texturas,
 )
 from settings import (
     ACELERACAO_PLAYER,
-    ALTURA,
     ATRITO_PLAYER,
     GAME_OVER,
     GRAVIDADE,
     JOGANDO,
     LARGURA,
+    ALTURA,
     TELA_INICIO,
     TEMPO_BUFFER_PULO,
     TEMPO_COYOTE,
@@ -36,6 +39,356 @@ from settings import (
 )
 
 MARGEM_COLISAO_ABELHA = 10
+MARGEM_COLISAO_SAHUR = 6
+
+
+@dataclass
+class EstadoJogo:
+    estado: int
+    fase: int
+    vidas: int
+    pontos: int
+    jogador: Player
+    blocos: list[Block]
+    inimigos: list[Enemy]
+    moedas: list[Coin]
+    objetivo: Goal
+    comprimento_fase: float
+    velocidade_x: float = 0.0
+    velocidade_y: float = 0.0
+    camera_x: float = 0.0
+    esta_no_chao: bool = False
+    tempo_coyote: float = 0.0
+    tempo_buffer_pulo: float = 0.0
+    invencivel: bool = False
+    tempo_invencivel: float = 0.0
+    enter_antes: bool = False
+    espaco_antes: bool = False
+
+
+def carregar_texturas_jogo():
+    return {
+        "player": carregar_textura("assets/nicolas_cage.png"),
+        "bee": carregar_textura("assets/bee_enemy.png"),
+        "sahur": carregar_textura("assets/tung_sahur_enemy.png"),
+        "ground": carregar_textura("assets/ground.png"),
+        "block": carregar_textura("assets/block.png"),
+        "chest": carregar_textura("assets/chest_goal.png"),
+        "coin": carregar_textura("assets/coin.png"),
+        "sky": carregar_textura("assets/sky.png"),
+    }
+
+
+def criar_estado_inicial():
+    fase = 1
+    jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = reiniciar_jogo(fase)
+    return EstadoJogo(
+        estado=TELA_INICIO,
+        fase=fase,
+        vidas=VIDAS_INICIAIS,
+        pontos=0,
+        jogador=jogador,
+        blocos=blocos,
+        inimigos=inimigos,
+        moedas=moedas,
+        objetivo=objetivo,
+        comprimento_fase=comprimento_fase,
+    )
+
+
+def resetar_estado_movimento(jogo: EstadoJogo):
+    jogo.velocidade_x = 0.0
+    jogo.velocidade_y = 0.0
+    jogo.camera_x = 0.0
+    jogo.esta_no_chao = False
+    jogo.tempo_coyote = 0.0
+    jogo.tempo_buffer_pulo = 0.0
+    jogo.invencivel = False
+    jogo.tempo_invencivel = 0.0
+    jogo.espaco_antes = False
+
+
+def iniciar_partida(jogo: EstadoJogo):
+    jogo.estado = JOGANDO
+    jogo.fase = 1
+    jogo.vidas = VIDAS_INICIAIS
+    jogo.pontos = 0
+    resetar_estado_movimento(jogo)
+    (
+        jogo.jogador,
+        jogo.blocos,
+        jogo.inimigos,
+        jogo.moedas,
+        jogo.objetivo,
+        jogo.comprimento_fase,
+    ) = reiniciar_jogo(jogo.fase)
+
+
+def _entrada_horizontal(janela):
+    esquerda = (
+        glfw.get_key(janela, glfw.KEY_LEFT) == glfw.PRESS
+        or glfw.get_key(janela, glfw.KEY_A) == glfw.PRESS
+    )
+    direita = (
+        glfw.get_key(janela, glfw.KEY_RIGHT) == glfw.PRESS
+        or glfw.get_key(janela, glfw.KEY_D) == glfw.PRESS
+    )
+    if direita and not esquerda:
+        return 1
+    if esquerda and not direita:
+        return -1
+    return 0
+
+
+def atualizar_movimento_horizontal(janela, jogo: EstadoJogo, delta_time: float):
+    direcao_x = _entrada_horizontal(janela)
+    if direcao_x != 0:
+        alvo_x = direcao_x * VELOCIDADE_PLAYER
+        if jogo.velocidade_x < alvo_x:
+            jogo.velocidade_x = min(alvo_x, jogo.velocidade_x + ACELERACAO_PLAYER * delta_time)
+        elif jogo.velocidade_x > alvo_x:
+            jogo.velocidade_x = max(alvo_x, jogo.velocidade_x - ACELERACAO_PLAYER * delta_time)
+    else:
+        if jogo.velocidade_x > 0:
+            jogo.velocidade_x = max(0.0, jogo.velocidade_x - ATRITO_PLAYER * delta_time)
+        elif jogo.velocidade_x < 0:
+            jogo.velocidade_x = min(0.0, jogo.velocidade_x + ATRITO_PLAYER * delta_time)
+
+
+def atualizar_buffer_pulo(janela, jogo: EstadoJogo, delta_time: float):
+    espaco_agora = glfw.get_key(janela, glfw.KEY_SPACE) == glfw.PRESS
+    if espaco_agora and not jogo.espaco_antes:
+        jogo.tempo_buffer_pulo = TEMPO_BUFFER_PULO
+    jogo.espaco_antes = espaco_agora
+
+    if jogo.tempo_buffer_pulo > 0:
+        jogo.tempo_buffer_pulo = max(0.0, jogo.tempo_buffer_pulo - delta_time)
+
+    if jogo.esta_no_chao:
+        jogo.tempo_coyote = TEMPO_COYOTE
+    elif jogo.tempo_coyote > 0:
+        jogo.tempo_coyote = max(0.0, jogo.tempo_coyote - delta_time)
+
+    if jogo.tempo_buffer_pulo > 0 and jogo.tempo_coyote > 0:
+        jogo.velocidade_y = VELOCIDADE_PULO
+        jogo.tempo_buffer_pulo = 0.0
+        jogo.tempo_coyote = 0.0
+        jogo.esta_no_chao = False
+
+
+def atualizar_fisica_jogador(jogo: EstadoJogo, delta_time: float):
+    deslocamento_x = jogo.velocidade_x * delta_time
+    jogo.jogador.x += deslocamento_x
+    if resolver_colisao_horizontal(jogo.jogador, jogo.blocos, deslocamento_x):
+        jogo.velocidade_x = 0.0
+
+    jogo.velocidade_y += GRAVIDADE * delta_time
+    jogo.jogador.y += jogo.velocidade_y * delta_time
+    jogo.velocidade_y, jogo.esta_no_chao = resolver_colisao_vertical(
+        jogo.jogador, jogo.blocos, jogo.velocidade_y
+    )
+    if jogo.esta_no_chao:
+        jogo.tempo_coyote = TEMPO_COYOTE
+
+    if jogo.jogador.x < 0:
+        jogo.jogador.x = 0
+        jogo.velocidade_x = 0.0
+    if jogo.jogador.x > jogo.comprimento_fase - jogo.jogador.w:
+        jogo.jogador.x = jogo.comprimento_fase - jogo.jogador.w
+        jogo.velocidade_x = 0.0
+
+
+def _colide_com_bloco(entidade, blocos: list[Block]):
+    entidade_ret = entidade.retangulo()
+    for bloco in blocos:
+        if retangulos_colidem(entidade_ret, bloco.retangulo()):
+            return True
+    return False
+
+
+def atualizar_inimigos(jogo: EstadoJogo, delta_time: float):
+    velocidade_base = 70 + jogo.fase * 12
+    for inimigo in jogo.inimigos:
+        x_anterior = inimigo.x
+        y_anterior = inimigo.y
+
+        if inimigo.tipo == "abelha":
+            inimigo.x += inimigo.direcao * velocidade_base * delta_time
+            inimigo.tempo += delta_time
+            inimigo.y = inimigo.base_y + math.sin(inimigo.tempo * 3.0) * 12.0
+        else:
+            velocidade_sahur = velocidade_base * 0.75
+            inimigo.x += inimigo.direcao * velocidade_sahur * delta_time
+            inimigo.y = inimigo.base_y
+
+            if inimigo.x <= inimigo.limite_esquerda:
+                inimigo.x = inimigo.limite_esquerda
+                inimigo.direcao = 1
+            if inimigo.x >= inimigo.limite_direita:
+                inimigo.x = inimigo.limite_direita
+                inimigo.direcao = -1
+
+        if _colide_com_bloco(inimigo, jogo.blocos):
+            inimigo.x = x_anterior
+            inimigo.y = y_anterior
+            inimigo.direcao *= -1
+        elif inimigo.tipo == "abelha":
+            if inimigo.x < 100:
+                inimigo.x = 100
+                inimigo.direcao = 1
+            if inimigo.x > jogo.comprimento_fase - 200:
+                inimigo.x = jogo.comprimento_fase - 200
+                inimigo.direcao = -1
+
+
+def coletar_moedas(jogo: EstadoJogo):
+    jogador_ret = jogo.jogador.retangulo()
+    for moeda in jogo.moedas[:]:
+        if retangulos_colidem(jogador_ret, moeda.retangulo()):
+            jogo.pontos += 10
+            jogo.moedas.remove(moeda)
+
+
+def atualizar_invencibilidade(jogo: EstadoJogo, delta_time: float):
+    if jogo.tempo_invencivel > 0:
+        jogo.tempo_invencivel -= delta_time
+        if jogo.tempo_invencivel <= 0:
+            jogo.invencivel = False
+
+
+def _retangulo_dano_inimigo(inimigo: Enemy):
+    margem = MARGEM_COLISAO_ABELHA if inimigo.tipo == "abelha" else MARGEM_COLISAO_SAHUR
+    largura = max(8.0, inimigo.w - margem * 2)
+    altura = max(8.0, inimigo.h - margem * 2)
+    return [
+        inimigo.x + margem,
+        inimigo.y + margem,
+        largura,
+        altura,
+    ]
+
+
+def aplicar_dano_inimigos(jogo: EstadoJogo):
+    if jogo.invencivel:
+        return
+
+    jogador_ret = jogo.jogador.retangulo()
+    for inimigo in jogo.inimigos[:]:
+        inimigo_ret = _retangulo_dano_inimigo(inimigo)
+        if retangulos_colidem(jogador_ret, inimigo_ret):
+            caiu_em_cima_do_sahur = (
+                inimigo.tipo == "sahur"
+                and jogo.velocidade_y < 0
+                and jogo.jogador.y >= inimigo.y + inimigo.h - 12
+            )
+            if caiu_em_cima_do_sahur:
+                jogo.inimigos.remove(inimigo)
+                jogo.pontos += 20
+                jogo.velocidade_y = VELOCIDADE_PULO * 0.65
+                jogo.esta_no_chao = False
+                break
+
+            jogo.vidas -= 1
+            jogo.invencivel = True
+            jogo.tempo_invencivel = 1.5
+            jogo.jogador.x -= 45
+            jogo.velocidade_y = 360
+            jogo.velocidade_x = 0.0
+            if jogo.vidas <= 0:
+                jogo.estado = GAME_OVER
+            break
+
+
+def processar_queda(jogo: EstadoJogo):
+    if jogo.jogador.y >= -120:
+        return
+
+    jogo.vidas -= 1
+    if jogo.vidas <= 0:
+        jogo.estado = GAME_OVER
+        return
+
+    jogo.jogador.x = max(80, jogo.jogador.x - 260)
+    jogo.jogador.y = 240
+    jogo.velocidade_x = 0.0
+    jogo.velocidade_y = 0.0
+    jogo.esta_no_chao = False
+    jogo.tempo_coyote = 0.0
+    jogo.tempo_buffer_pulo = 0.0
+    jogo.invencivel = True
+    jogo.tempo_invencivel = 1.5
+
+
+def avancar_fase(jogo: EstadoJogo):
+    if not retangulos_colidem(jogo.jogador.retangulo(), jogo.objetivo.retangulo()):
+        return
+
+    jogo.fase += 1
+    jogo.pontos += 100
+    jogo.velocidade_x = 0.0
+    jogo.velocidade_y = 0.0
+    jogo.esta_no_chao = False
+    jogo.tempo_coyote = 0.0
+    jogo.tempo_buffer_pulo = 0.0
+    (
+        jogo.jogador,
+        jogo.blocos,
+        jogo.inimigos,
+        jogo.moedas,
+        jogo.objetivo,
+        jogo.comprimento_fase,
+    ) = reiniciar_jogo(jogo.fase)
+
+
+def atualizar_camera(jogo: EstadoJogo):
+    jogo.camera_x = jogo.jogador.x - 280
+    if jogo.camera_x < 0:
+        jogo.camera_x = 0
+    camera_maxima = jogo.comprimento_fase - LARGURA
+    if jogo.camera_x > camera_maxima:
+        jogo.camera_x = camera_maxima
+
+
+def atualizar_jogo(janela, jogo: EstadoJogo, delta_time: float):
+    atualizar_movimento_horizontal(janela, jogo, delta_time)
+    atualizar_buffer_pulo(janela, jogo, delta_time)
+    atualizar_fisica_jogador(jogo, delta_time)
+    atualizar_inimigos(jogo, delta_time)
+    coletar_moedas(jogo)
+    atualizar_invencibilidade(jogo, delta_time)
+    aplicar_dano_inimigos(jogo)
+    processar_queda(jogo)
+    avancar_fase(jogo)
+    atualizar_camera(jogo)
+
+
+def desenhar_frame(texturas, jogo: EstadoJogo, tempo_atual: float):
+    desenhar_fundo(texturas["sky"], jogo.camera_x, tempo_atual)
+    desenhar_mapa(
+        texturas,
+        jogo.blocos,
+        jogo.inimigos,
+        jogo.moedas,
+        jogo.objetivo,
+        jogo.camera_x,
+    )
+    desenhar_jogador(
+        texturas,
+        jogo.jogador,
+        jogo.camera_x,
+        jogo.invencivel,
+        tempo_atual,
+    )
+    desenhar_hud(
+        jogo.vidas,
+        jogo.pontos,
+        jogo.fase,
+        jogo.camera_x,
+        jogo.comprimento_fase,
+        tempo_atual,
+    )
+    if jogo.estado in (TELA_INICIO, GAME_OVER):
+        desenhar_tela_mensagem(jogo.estado, tempo_atual)
 
 
 def main():
@@ -51,40 +404,14 @@ def main():
     glfw.swap_interval(1)
     configurar_opengl()
 
-    texturas = {
-        "player": carregar_textura("assets/nicolas_cage.png"),
-        "bee": carregar_textura("assets/bee_enemy.png"),
-        "ground": carregar_textura("assets/ground.png"),
-        "block": carregar_textura("assets/block.png"),
-        "chest": carregar_textura("assets/chest_goal.png"),
-        "coin": carregar_textura("assets/coin.png"),
-        "sky": carregar_textura("assets/sky.png"),
-    }
-
-    estado = TELA_INICIO
-    fase = 1
-    vidas = VIDAS_INICIAIS
-    pontos = 0
-    jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = reiniciar_jogo(fase)
-
-    velocidade_x = 0.0
-    velocidade_y = 0.0
-    camera_x = 0.0
-    esta_no_chao = False
-    tempo_coyote = 0.0
-    tempo_buffer_pulo = 0.0
-    invencivel = False
-    tempo_invencivel = 0.0
-    enter_antes = False
-    espaco_antes = False
+    texturas = carregar_texturas_jogo()
+    jogo = criar_estado_inicial()
     tempo_anterior = time.time()
 
     while not glfw.window_should_close(janela):
         tempo_atual = time.time()
-        delta_time = tempo_atual - tempo_anterior
+        delta_time = min(tempo_atual - tempo_anterior, 0.05)
         tempo_anterior = tempo_atual
-        if delta_time > 0.05:
-            delta_time = 0.05
 
         glfw.poll_events()
 
@@ -92,199 +419,17 @@ def main():
             glfw.set_window_should_close(janela, True)
 
         enter_agora = glfw.get_key(janela, glfw.KEY_ENTER) == glfw.PRESS
-        if enter_agora and not enter_antes:
-            if estado == TELA_INICIO or estado == GAME_OVER:
-                estado = JOGANDO
-                fase = 1
-                vidas = VIDAS_INICIAIS
-                pontos = 0
-                velocidade_x = 0.0
-                velocidade_y = 0.0
-                esta_no_chao = False
-                tempo_coyote = 0.0
-                tempo_buffer_pulo = 0.0
-                invencivel = False
-                tempo_invencivel = 0.0
-                espaco_antes = False
-                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = (
-                    reiniciar_jogo(fase)
-                )
-        enter_antes = enter_agora
+        if enter_agora and not jogo.enter_antes and jogo.estado in (TELA_INICIO, GAME_OVER):
+            iniciar_partida(jogo)
+        jogo.enter_antes = enter_agora
 
-        if estado == JOGANDO:
-            esquerda = (
-                glfw.get_key(janela, glfw.KEY_LEFT) == glfw.PRESS
-                or glfw.get_key(janela, glfw.KEY_A) == glfw.PRESS
-            )
-            direita = (
-                glfw.get_key(janela, glfw.KEY_RIGHT) == glfw.PRESS
-                or glfw.get_key(janela, glfw.KEY_D) == glfw.PRESS
-            )
-            direcao_x = 0
-            if direita and not esquerda:
-                direcao_x = 1
-            elif esquerda and not direita:
-                direcao_x = -1
+        if jogo.estado == JOGANDO:
+            atualizar_jogo(janela, jogo, delta_time)
 
-            if direcao_x != 0:
-                alvo_x = direcao_x * VELOCIDADE_PLAYER
-                if velocidade_x < alvo_x:
-                    velocidade_x = min(
-                        alvo_x, velocidade_x + ACELERACAO_PLAYER * delta_time
-                    )
-                elif velocidade_x > alvo_x:
-                    velocidade_x = max(
-                        alvo_x, velocidade_x - ACELERACAO_PLAYER * delta_time
-                    )
-            else:
-                if velocidade_x > 0:
-                    velocidade_x = max(0.0, velocidade_x - ATRITO_PLAYER * delta_time)
-                elif velocidade_x < 0:
-                    velocidade_x = min(0.0, velocidade_x + ATRITO_PLAYER * delta_time)
-
-            espaco_agora = glfw.get_key(janela, glfw.KEY_SPACE) == glfw.PRESS
-            if espaco_agora and not espaco_antes:
-                tempo_buffer_pulo = TEMPO_BUFFER_PULO
-            espaco_antes = espaco_agora
-            if tempo_buffer_pulo > 0:
-                tempo_buffer_pulo -= delta_time
-                if tempo_buffer_pulo < 0:
-                    tempo_buffer_pulo = 0.0
-
-            if esta_no_chao:
-                tempo_coyote = TEMPO_COYOTE
-            elif tempo_coyote > 0:
-                tempo_coyote -= delta_time
-                if tempo_coyote < 0:
-                    tempo_coyote = 0.0
-
-            if tempo_buffer_pulo > 0 and tempo_coyote > 0:
-                velocidade_y = VELOCIDADE_PULO
-                tempo_buffer_pulo = 0.0
-                tempo_coyote = 0.0
-                esta_no_chao = False
-
-            deslocamento_x = velocidade_x * delta_time
-            jogador[0] += deslocamento_x
-            if resolver_colisao_horizontal(jogador, blocos, deslocamento_x):
-                velocidade_x = 0.0
-
-            velocidade_y += GRAVIDADE * delta_time
-            jogador[1] += velocidade_y * delta_time
-            velocidade_y, esta_no_chao = resolver_colisao_vertical(
-                jogador, blocos, velocidade_y
-            )
-            if esta_no_chao:
-                tempo_coyote = TEMPO_COYOTE
-
-            if jogador[0] < 0:
-                jogador[0] = 0
-                velocidade_x = 0.0
-            if jogador[0] > comprimento_fase - jogador[2]:
-                jogador[0] = comprimento_fase - jogador[2]
-                velocidade_x = 0.0
-
-            jogador_ret = [jogador[0], jogador[1], jogador[2], jogador[3]]
-
-            for inimigo in inimigos:
-                velocidade_inimigo = 70 + fase * 12
-                x_anterior = inimigo["x"]
-                y_anterior = inimigo["y"]
-                inimigo["x"] += inimigo["dir"] * velocidade_inimigo * delta_time
-                inimigo["tempo"] += delta_time
-                inimigo["y"] += np.sin(inimigo["tempo"] * 3.0) * 12.0 * delta_time
-                inimigo_ret = [inimigo["x"], inimigo["y"], inimigo["w"], inimigo["h"]]
-                bateu_em_bloco = False
-                for bloco in blocos:
-                    if retangulos_colidem(inimigo_ret, bloco):
-                        bateu_em_bloco = True
-                        break
-
-                if bateu_em_bloco:
-                    inimigo["x"] = x_anterior
-                    inimigo["y"] = y_anterior
-                    inimigo["dir"] *= -1
-                else:
-                    if inimigo["x"] < 100:
-                        inimigo["x"] = 100
-                        inimigo["dir"] = 1
-                    if inimigo["x"] > comprimento_fase - 200:
-                        inimigo["x"] = comprimento_fase - 200
-                        inimigo["dir"] = -1
-
-            for moeda in moedas[:]:
-                if retangulos_colidem(jogador_ret, moeda):
-                    pontos += 10
-                    moedas.remove(moeda)
-
-            if tempo_invencivel > 0:
-                tempo_invencivel -= delta_time
-                if tempo_invencivel <= 0:
-                    invencivel = False
-
-            for inimigo in inimigos:
-                inimigo_dano = [
-                    inimigo["x"] + MARGEM_COLISAO_ABELHA,
-                    inimigo["y"] + MARGEM_COLISAO_ABELHA,
-                    inimigo["w"] - MARGEM_COLISAO_ABELHA * 2,
-                    inimigo["h"] - MARGEM_COLISAO_ABELHA * 2,
-                ]
-                if retangulos_colidem(jogador_ret, inimigo_dano):
-                    if not invencivel:
-                        vidas -= 1
-                        invencivel = True
-                        tempo_invencivel = 1.5
-                        jogador[0] -= 45
-                        velocidade_y = 360
-                        velocidade_x = 0.0
-                        if vidas <= 0:
-                            estado = GAME_OVER
-                    break
-
-            if jogador[1] < -120:
-                vidas -= 1
-                if vidas <= 0:
-                    estado = GAME_OVER
-                else:
-                    jogador[0] = max(80, jogador[0] - 260)
-                    jogador[1] = 240
-                    velocidade_x = 0.0
-                    velocidade_y = 0.0
-                    esta_no_chao = False
-                    tempo_coyote = 0.0
-                    tempo_buffer_pulo = 0.0
-                    invencivel = True
-                    tempo_invencivel = 1.5
-
-            if retangulos_colidem(jogador_ret, objetivo):
-                fase += 1
-                pontos += 100
-                velocidade_x = 0.0
-                velocidade_y = 0.0
-                esta_no_chao = False
-                tempo_coyote = 0.0
-                tempo_buffer_pulo = 0.0
-                jogador, blocos, inimigos, moedas, objetivo, comprimento_fase = (
-                    reiniciar_jogo(fase)
-                )
-
-            camera_x = jogador[0] - 280
-            if camera_x < 0:
-                camera_x = 0
-            camera_maxima = comprimento_fase - LARGURA
-            if camera_x > camera_maxima:
-                camera_x = camera_maxima
-
-        desenhar_fundo(texturas["sky"], camera_x, tempo_atual)
-        desenhar_mapa(texturas, blocos, inimigos, moedas, objetivo, camera_x)
-        desenhar_jogador(texturas, jogador, camera_x, invencivel, tempo_atual)
-        desenhar_hud(vidas, pontos, fase, camera_x, comprimento_fase, tempo_atual)
-
-        if estado == TELA_INICIO or estado == GAME_OVER:
-            desenhar_tela_mensagem(estado, tempo_atual)
-
+        desenhar_frame(texturas, jogo, tempo_atual)
         glfw.swap_buffers(janela)
 
+    liberar_texturas(texturas)
     glfw.destroy_window(janela)
     glfw.terminate()
 
