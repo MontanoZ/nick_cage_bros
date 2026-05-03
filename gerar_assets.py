@@ -44,6 +44,38 @@ def bee():
     salvar('bee_enemy.png', img)
 
 
+def sahur():
+    img = Image.new('RGBA', (44, 66), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    # Corpo de madeira clara
+    d.rounded_rectangle([10, 10, 33, 47], radius=8, fill=(171, 109, 55, 255), outline=(92, 54, 28, 255))
+    quad(d, 12, 12, 20, 4, (214, 167, 94, 255))
+    quad(d, 16, 20, 3, 3, (255, 255, 255, 255))
+    quad(d, 24, 20, 3, 3, (255, 255, 255, 255))
+    quad(d, 17, 21, 2, 2, (20, 20, 20, 255))
+    quad(d, 25, 21, 2, 2, (20, 20, 20, 255))
+    quad(d, 20, 31, 4, 1, (100, 56, 38, 255))
+
+    # Braços
+    quad(d, 7, 27, 3, 14, (198, 132, 72, 255))
+    quad(d, 34, 27, 3, 14, (198, 132, 72, 255))
+    quad(d, 6, 40, 5, 3, (183, 116, 61, 255))
+    quad(d, 33, 40, 5, 3, (183, 116, 61, 255))
+
+    # Pernas e pés
+    quad(d, 15, 47, 5, 15, (145, 84, 44, 255))
+    quad(d, 24, 47, 5, 15, (145, 84, 44, 255))
+    quad(d, 12, 61, 9, 4, (214, 167, 94, 255))
+    quad(d, 23, 61, 9, 4, (214, 167, 94, 255))
+
+    # Porrete em diagonal
+    d.polygon([(4, 12), (8, 14), (19, 44), (15, 46)], fill=(196, 133, 67, 255), outline=(92, 54, 28, 255))
+    d.ellipse([0, 8, 8, 16], fill=(178, 113, 56, 255), outline=(92, 54, 28, 255))
+
+    salvar('tung_sahur_enemy.png', img)
+
+
 def ground():
     img = Image.new('RGBA', (32, 32), (145, 86, 38, 255))
     d = ImageDraw.Draw(img)
@@ -96,6 +128,7 @@ def sky():
 
 player()
 bee()
+sahur()
 ground()
 block()
 chest()
