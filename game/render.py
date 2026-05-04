@@ -179,7 +179,7 @@ def _viewport_letterbox(largura_fb: int, altura_fb: int) -> None:
     glViewport(ox, oy, vw, vh)
 
 
-# Configura viewport, projeção ortográfica e blending (resolução lógica fixa).
+# Configura viewport, projeção ortográfica e blending.
 def configurar_opengl(largura_framebuffer: int | None = None, altura_framebuffer: int | None = None):
     if largura_framebuffer is not None and altura_framebuffer is not None:
         _viewport_letterbox(largura_framebuffer, altura_framebuffer)
