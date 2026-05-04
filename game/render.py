@@ -8,8 +8,8 @@ import numpy as np
 from OpenGL.GL import *
 from PIL import Image, ImageDraw, ImageFont
 
-from models import Block, Coin, Enemy, Goal, Player
-from settings import ALTURA, GAME_OVER, LARGURA, TELA_INICIO
+from game.models import Block, Coin, Enemy, Goal, Player
+from game.settings import ALTURA, GAME_OVER, LARGURA, TELA_INICIO
 
 _CACHE_TEXTO_MAX_ITENS = 128
 _cache_texturas_texto: "OrderedDict[tuple, tuple[int, int, int]]" = OrderedDict()

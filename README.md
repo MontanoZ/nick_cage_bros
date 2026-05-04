@@ -32,13 +32,14 @@ Execute o comando dentro da pasta do projeto, porque o código carrega as imagen
 ## Arquivos
 
 - `main.py`: jogo principal.
-- `settings.py`: constantes compartilhadas.
-- `collision.py`: colisões e resolução de movimento.
-- `level.py`: geração aleatória das fases.
-- `render.py`: textura, HUD, cenário e telas.
+- `game/`: pacote com os módulos do jogo.
+- `game/settings.py`: constantes compartilhadas.
+- `game/collision.py`: colisões e resolução de movimento.
+- `game/level.py`: geração aleatória das fases.
+- `game/render.py`: textura, HUD, cenário e telas.
+- `game/models.py`: modelos de dados para jogador, inimigos, itens e fases.
 - `assets/`: texturas PNG usadas no jogo.
 - `gerar_assets.py`: script opcional para recriar as texturas placeholder.
-- `models.py`: modelos de dados para jogador, inimigos, itens e fases.
 
 ## Imagens do jogo
 

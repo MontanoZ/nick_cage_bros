@@ -2,9 +2,9 @@
 
 import random
 
-from collision import retangulos_colidem
-from models import Block, Coin, Enemy, Goal, Player
-from settings import (
+from game.collision import retangulos_colidem
+from game.models import Block, Coin, Enemy, Goal, Player
+from game.settings import (
     ALTURA_PLAYER,
     ALTURAS_PLATAFORMA,
     LARGURA_MAX_PLATAFORMA,

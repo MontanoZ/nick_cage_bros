@@ -1,6 +1,6 @@
 # Regras de colisão do jogo: detecção entre retângulos e resolução de colisões do jogador.
 
-from models import Block, Player
+from game.models import Block, Player
 
 
 # Verifica sobreposição entre dois retângulos axis-aligned.

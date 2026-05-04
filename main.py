@@ -6,14 +6,14 @@ from dataclasses import dataclass
 
 import glfw
 
-from collision import (
+from game.collision import (
     resolver_colisao_horizontal,
     resolver_colisao_vertical,
     retangulos_colidem,
 )
-from level import reiniciar_jogo
-from models import Block, Coin, Enemy, Goal, Player
-from render import (
+from game.level import reiniciar_jogo
+from game.models import Block, Coin, Enemy, Goal, Player
+from game.render import (
     carregar_textura,
     configurar_opengl,
     desenhar_fundo,
@@ -23,7 +23,7 @@ from render import (
     desenhar_tela_mensagem,
     liberar_texturas,
 )
-from settings import (
+from game.settings import (
     ACELERACAO_PLAYER,
     ATRITO_PLAYER,
     GAME_OVER,
