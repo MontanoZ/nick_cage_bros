@@ -1,0 +1,6 @@
+#bibliotecas necessarias para o funcionamento do jogo
+PyOpenGL
+PyOpenGL_accelerate
+glfw
+Pillow
+numpy
